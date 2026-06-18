@@ -1,0 +1,131 @@
+# ============================================================
+# 注塑车间定位块工装资产登记系统 - Docker Compose 编排
+# ============================================================
+# 端口约束说明：
+# - 所有对外映射端口统一绑定 127.0.0.1，禁止 0.0.0.0
+# - 端口全部从 .env 文件读取，不写死
+# - 端口冲突时明确报错，不自动换端口
+# - 固定端口：前端 3008，后端 8088，MySQL 3309，Redis 6380
+# ============================================================
+
+services:
+  # ============================================================
+  # MySQL 8.0 数据库
+  # ============================================================
+  mysql:
+    image: ${DOCKER_REGISTRY}/library/mysql:8.0
+    container_name: ${PROJECT_NAME}-mysql
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MYSQL_PORT}:${MYSQL_CONTAINER_PORT}"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_CHARACTER_SET_SERVER: ${MYSQL_CHARSET}
+      MYSQL_COLLATION_SERVER: ${MYSQL_CHARSET}_unicode_ci
+      TZ: ${TZ}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - tooling-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ============================================================
+  # Redis 7 缓存
+  # ============================================================
+  redis:
+    image: ${DOCKER_REGISTRY}/library/redis:7-alpine
+    container_name: ${PROJECT_NAME}-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${REDIS_PORT}:${REDIS_CONTAINER_PORT}"
+    volumes:
+      - redis_data:/data
+    networks:
+      - tooling-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-h", "127.0.0.1", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ============================================================
+  # 后端 SpringBoot 3.3
+  # ============================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    image: ${PROJECT_NAME}-backend:latest
+    container_name: ${PROJECT_NAME}-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${BACKEND_PORT}:${BACKEND_CONTAINER_PORT}"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:${MYSQL_CONTAINER_PORT}/${MYSQL_DATABASE}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=${TZ}&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: ${REDIS_CONTAINER_PORT}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE: 10MB
+      SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: 50MB
+      FILE_UPLOAD_DIR: /app/uploads/tooling-images
+      TZ: ${TZ}
+    volumes:
+      - backend_uploads:/app/uploads/tooling-images
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tooling-net
+
+  # ============================================================
+  # 前端 Nginx
+  # ============================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    image: ${PROJECT_NAME}-frontend:latest
+    container_name: ${PROJECT_NAME}-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT}:${FRONTEND_CONTAINER_PORT}"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - tooling-net
+
+# ============================================================
+# 数据卷
+# ============================================================
+volumes:
+  mysql_data:
+    name: ${PROJECT_NAME}-mysql-data
+  redis_data:
+    name: ${PROJECT_NAME}-redis-data
+  backend_uploads:
+    name: ${PROJECT_NAME}-backend-uploads
+
+# ============================================================
+# 网络
+# ============================================================
+networks:
+  tooling-net:
+    driver: bridge
+    name: ${PROJECT_NAME}-net

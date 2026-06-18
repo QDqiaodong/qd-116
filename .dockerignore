@@ -1,0 +1,64 @@
+# ============================================================
+# 根目录 .dockerignore - 排除构建上下文无关文件
+# ============================================================
+
+# Git
+.git
+.gitignore
+.github
+.gitattributes
+
+# IDE & 编辑器
+.idea
+.vscode
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+
+# 依赖与构建产物（各目录有单独的 .dockerignore）
+node_modules/
+dist/
+target/
+build/
+.gradle/
+.mvn/
+
+# 截图与测试
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+coverage/
+.nyc_output/
+
+# 文档（如无需打入镜像）
+README.md
+*.md
+docs/
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 系统文件
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*

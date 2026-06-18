@@ -1,0 +1,66 @@
+# ============================================================
+# 后端 .dockerignore - 排除构建上下文无关文件
+# ============================================================
+
+# 构建产物
+target
+target/
+build
+build/
+out
+out/
+
+# 依赖缓存
+.m2
+.m2/
+.gradle
+.gradle/
+
+# IDE
+.idea
+.vscode
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+
+# 日志
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+
+# 临时
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# 环境变量
+.env
+.env.local
+
+# 测试
+target/test-classes/
+target/surefire-reports/
+*.test.java
+*Test.java
+
+# 文档
+README.md
+*.md
+docs/
+
+# 截图
+*.png
+*.jpg
+*.jpeg
+*.gif
+screenshots/
+
+# Git
+.git
+.gitignore
