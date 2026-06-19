@@ -8,8 +8,12 @@ export function getAsset(id) {
   return request.get(`/tooling/${id}`)
 }
 
-export function createAsset(data) {
-  return request.post('/tooling', data)
+export function createAsset(data, forceCreate = false) {
+  return request.post('/tooling', data, { params: { forceCreate } })
+}
+
+export function checkDuplicateAsset(data) {
+  return request.post('/tooling/check-duplicate', data)
 }
 
 export function updateAsset(id, data) {

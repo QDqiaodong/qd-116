@@ -1,6 +1,8 @@
 package com.tooling.asset;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,9 +23,28 @@ public class ToolingAssetController {
 
     private final ToolingAssetService toolingAssetService;
 
+    @PostMapping("/check-duplicate")
+    public Result<DuplicateCheckResult> checkDuplicate(@RequestBody ToolingAsset asset) {
+        return Result.ok(toolingAssetService.checkDuplicate(asset));
+    }
+
     @PostMapping
-    public Result<ToolingAsset> create(@RequestBody ToolingAsset asset) {
-        return Result.ok(toolingAssetService.createAsset(asset));
+    public ResponseEntity<Result<ToolingAsset>> create(
+            @RequestBody ToolingAsset asset,
+            @RequestParam(defaultValue = "false") boolean forceCreate) {
+        try {
+            ToolingAsset created = toolingAssetService.createAsset(asset, forceCreate);
+            return ResponseEntity.ok(Result.ok(created));
+        } catch (DuplicateWarningException e) {
+            DuplicateCheckResult warning = DuplicateCheckResult.builder()
+                    .duplicate(true)
+                    .codeDuplicate(false)
+                    .similarAssets(e.getSimilarAssets())
+                    .message(e.getMessage())
+                    .build();
+            Result<ToolingAsset> result = new Result<>(409, e.getMessage(), null);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(result);
+        }
     }
 
     @PutMapping("/{id}")

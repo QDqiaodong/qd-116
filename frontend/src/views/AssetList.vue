@@ -217,6 +217,7 @@ import {
   uploadFile,
   transferTooling,
   scrapTooling,
+  checkDuplicateAsset,
 } from '../api/tooling'
 import { batchCompressImages } from '../utils/compress'
 
@@ -330,35 +331,110 @@ const openDialog = (item) => {
   dialogVisible.value = true
 }
 
+const prepareImage = async () => {
+  const newFiles = fileList.value.filter((f) => f.raw && f.status !== 'success')
+  if (newFiles.length) {
+    const rawFiles = newFiles.map((f) => f.raw)
+    const compressed = await batchCompressImages(rawFiles)
+    const uploadResult = await uploadFile(compressed[0])
+    form.imageUrl = uploadResult.data
+  } else {
+    const existingFile = fileList.value.find((f) => f.status === 'success' && f.url)
+    if (existingFile && existingFile.url) {
+      form.imageUrl = existingFile.url.replace('/api/file/', '')
+    }
+  }
+}
+
+const buildDuplicateHtml = (data) => {
+  const assets = data.similarAssets || []
+  let html = '<div style="color:#e6a23c;font-weight:600;margin-bottom:10px;">⚠️ 检测到疑似重复记录</div>'
+  html += '<div style="margin-bottom:12px;">以下工装与当前录入信息高度相似，请确认是否继续录入：</div>'
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+  html += '<thead><tr style="background:#fafafa;">'
+  html += '<th style="border:1px solid #ebeef5;padding:6px 8px;text-align:left;">编号</th>'
+  html += '<th style="border:1px solid #ebeef5;padding:6px 8px;text-align:left;">适配产品</th>'
+  html += '<th style="border:1px solid #ebeef5;padding:6px 8px;text-align:left;">工位</th>'
+  html += '<th style="border:1px solid #ebeef5;padding:6px 8px;text-align:left;">入库日期</th>'
+  html += '</tr></thead><tbody>'
+  assets.forEach((a) => {
+    html += `<tr>
+      <td style="border:1px solid #ebeef5;padding:6px 8px;">${a.toolingCode || '-'}</td>
+      <td style="border:1px solid #ebeef5;padding:6px 8px;">${a.productName || '-'}</td>
+      <td style="border:1px solid #ebeef5;padding:6px 8px;">${a.workstation || '-'}</td>
+      <td style="border:1px solid #ebeef5;padding:6px 8px;">${a.entryDate || '-'}</td>
+    </tr>`
+  })
+  html += '</tbody></table>'
+  html += '<div style="margin-top:12px;color:#909399;font-size:12px;">（判定条件：适配产品 + 存放工位 相同，且入库日期相差 ±7 天以内）</div>'
+  return html
+}
+
+const doCreateAsset = async (forceCreate = false) => {
+  const res = await createAsset({ ...form }, forceCreate)
+  if (res.code === 409) {
+    try {
+      await ElMessageBox({
+        title: '疑似重复提醒',
+        dangerouslyUseHTMLString: true,
+        message: buildDuplicateHtml({ similarAssets: [] }) + '<div style="margin-top:10px;">' + (res.message || '存在疑似重复记录') + '</div>',
+        confirmButtonText: '确认继续录入',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+      return await doCreateAsset(true)
+    } catch {
+      throw new Error('cancelled')
+    }
+  }
+  return res
+}
+
 const handleSubmit = async () => {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
   submitting.value = true
   try {
-    const newFiles = fileList.value.filter((f) => f.raw && f.status !== 'success')
-    if (newFiles.length) {
-      const rawFiles = newFiles.map((f) => f.raw)
-      const compressed = await batchCompressImages(rawFiles)
-      const uploadResult = await uploadFile(compressed[0])
-      form.imageUrl = uploadResult.data
-    } else {
-      const existingFile = fileList.value.find((f) => f.status === 'success' && f.url)
-      if (existingFile && existingFile.url) {
-        form.imageUrl = existingFile.url.replace('/api/file/', '')
-      }
-    }
+    await prepareImage()
 
     if (isEdit.value) {
       await updateAsset(editId.value, { ...form })
       ElMessage.success('更新成功')
     } else {
-      await createAsset({ ...form })
+      const checkRes = await checkDuplicateAsset({ ...form })
+      const checkData = checkRes.data || {}
+
+      if (checkData.codeDuplicate) {
+        ElMessage.error('工装编号已存在，请更换编号')
+        submitting.value = false
+        return
+      }
+
+      if (checkData.duplicate && checkData.similarAssets && checkData.similarAssets.length > 0) {
+        try {
+          await ElMessageBox({
+            title: '疑似重复提醒',
+            dangerouslyUseHTMLString: true,
+            message: buildDuplicateHtml(checkData),
+            confirmButtonText: '确认继续录入',
+            cancelButtonText: '取消',
+            type: 'warning',
+          })
+        } catch {
+          submitting.value = false
+          return
+        }
+        await doCreateAsset(true)
+      } else {
+        await doCreateAsset(false)
+      }
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
     fetchList()
     fetchStats()
-  } catch {
+  } catch (err) {
+    if (err && err.message === 'cancelled') return
     ElMessage.error(isEdit.value ? '更新失败' : '创建失败')
   } finally {
     submitting.value = false
