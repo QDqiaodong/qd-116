@@ -100,6 +100,10 @@ export function listToolingDiffs(toolingCode) {
   return request.get(`/inventory/diff/${toolingCode}`)
 }
 
+export function listToolingDiffsByMonth(checkMonth) {
+  return request.get(`/inventory/diff/month/${checkMonth}`)
+}
+
 export function getNextLocatorBlockCode() {
   return request.get('/code-rule/locator-block/next')
 }

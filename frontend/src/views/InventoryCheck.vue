@@ -27,6 +27,79 @@
       <el-button type="success" :icon="Plus" @click="openDialog">新增清点</el-button>
     </div>
 
+    <el-card class="region-panel" shadow="never">
+      <template #header>
+        <div class="region-panel-header">
+          <span class="region-panel-title">分区盘点</span>
+          <span class="region-panel-sub" v-if="latestCheck">
+            最近清点月份：{{ latestCheck.checkMonth }}（实盘/差异取自该月逐项盘点记录）
+          </span>
+          <span class="region-panel-sub" v-else>暂无清点记录，账面数取自工装台账，实盘默认等于账面</span>
+        </div>
+      </template>
+      <el-empty
+        v-if="!assets.length"
+        description="暂无工装数据，无法分区盘点"
+        :image-size="80"
+      />
+      <el-collapse v-else v-model="activeRegions">
+        <el-collapse-item
+          v-for="g in regionGroups"
+          :key="g.region"
+          :name="g.region"
+        >
+          <template #title>
+            <div class="region-header">
+              <span class="region-name">{{ g.region }}</span>
+              <div class="region-stats">
+                <span class="rs">
+                  <i>账面</i><b>{{ g.book }}</b>
+                </span>
+                <span class="rs">
+                  <i>实盘</i><b>{{ g.actual }}</b>
+                </span>
+                <span class="rs" :class="diffClass(g.diff)">
+                  <i>差异</i><b>{{ g.diff > 0 ? '+' : '' }}{{ g.diff }}</b>
+                </span>
+                <span class="rs rs-muted">
+                  <i>已盘点</i><b>{{ g.checked }}/{{ g.book }}</b>
+                </span>
+              </div>
+            </div>
+          </template>
+          <el-table :data="g.assets" size="small" border>
+            <el-table-column prop="toolingCode" label="工装编号" min-width="150" />
+            <el-table-column prop="productName" label="适配产品" min-width="120" />
+            <el-table-column prop="workstation" label="存放工位" min-width="120" />
+            <el-table-column label="状态" min-width="90">
+              <template #default="{ row }">
+                <el-tag size="small" :type="assetStatusTagType(row.status)">{{ assetStatusLabel(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="盘点结果" min-width="100">
+              <template #default="{ row }">
+                <el-tag v-if="row.diffType === 'MISSING'" type="danger" size="small">盘亏</el-tag>
+                <el-tag v-else-if="row.diffType === 'EXTRA'" type="warning" size="small">盘盈</el-tag>
+                <el-tag v-else-if="row.diffType === 'MATCH'" type="success" size="small">一致</el-tag>
+                <span v-else class="not-checked">未盘点</span>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-if="g.extraDiffs.length" class="extra-list">
+            <span class="extra-title">盘盈项（台账无记录）：</span>
+            <el-tag
+              v-for="d in g.extraDiffs"
+              :key="d.toolingCode"
+              type="warning"
+              size="small"
+              class="extra-tag"
+            >{{ d.toolingCode }}</el-tag>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
+    </el-card>
+
+    <div class="section-title">清点记录</div>
     <el-table :data="tableData" v-loading="loading" border stripe style="width: 100%">
       <el-table-column prop="checkMonth" label="清点月份" min-width="120" />
       <el-table-column prop="totalBook" label="账面数量" min-width="100" />
@@ -89,11 +162,95 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { listChecks, createCheck, getLatestCheck } from '../api/tooling'
+import { listChecks, createCheck, getLatestCheck, listAssets, listToolingDiffsByMonth } from '../api/tooling'
 
 const loading = ref(false)
 const tableData = ref([])
 const latestCheck = ref(null)
+const assets = ref([])
+const diffs = ref([])
+const activeRegions = ref(['注塑机区', '模具库', '待检区', '其他'])
+
+const REGION_ORDER = ['注塑机区', '模具库', '待检区', '其他']
+
+const regionOf = (ws) => {
+  if (!ws) return '其他'
+  if (ws.startsWith('注塑机')) return '注塑机区'
+  if (ws.startsWith('模具库')) return '模具库'
+  if (ws === '待检区' || ws.startsWith('待检')) return '待检区'
+  return '其他'
+}
+
+const assetStatusLabel = (status) => {
+  const map = { IN_USE: '在用', TRANSFERRED: '已移位', SCRAPPED: '已报废' }
+  return map[status] || status || '-'
+}
+
+const assetStatusTagType = (status) => {
+  const map = { IN_USE: 'success', TRANSFERRED: 'warning', SCRAPPED: 'danger' }
+  return map[status] || 'info'
+}
+
+const regionGroups = computed(() => {
+  const activeAssets = assets.value.filter((a) => a.status !== 'SCRAPPED')
+  const diffByCode = {}
+  diffs.value.forEach((d) => {
+    diffByCode[d.toolingCode] = d
+  })
+  const groups = {}
+  const ensure = (r) => {
+    if (!groups[r]) {
+      groups[r] = { region: r, assets: [], book: 0, missing: 0, checked: 0, extraDiffs: [], actual: 0, diff: 0 }
+    }
+    return groups[r]
+  }
+  REGION_ORDER.forEach(ensure)
+  activeAssets.forEach((a) => {
+    const g = ensure(regionOf(a.workstation))
+    const d = diffByCode[a.toolingCode]
+    g.assets.push({ ...a, diffType: d ? d.diffType : null })
+    g.book++
+    if (d) {
+      g.checked++
+      if (d.bookExists === true && d.actualExists === false) g.missing++
+    }
+  })
+  const activeCodes = new Set(activeAssets.map((a) => a.toolingCode))
+  diffs.value.forEach((d) => {
+    if (d.bookExists === false && d.actualExists === true && !activeCodes.has(d.toolingCode)) {
+      ensure(regionOf(d.workstation)).extraDiffs.push(d)
+    }
+  })
+  Object.values(groups).forEach((g) => {
+    g.actual = g.book - g.missing + g.extraDiffs.length
+    g.diff = g.actual - g.book
+  })
+  return REGION_ORDER
+    .map((r) => groups[r])
+    .filter((g) => g.region !== '其他' || g.assets.length || g.extraDiffs.length)
+})
+
+const fetchAssets = async () => {
+  try {
+    const res = await listAssets({})
+    assets.value = res.data || []
+  } catch {
+    /* ignore */
+  }
+}
+
+const fetchDiffs = async () => {
+  if (!latestCheck.value || !latestCheck.value.checkMonth) {
+    diffs.value = []
+    return
+  }
+  try {
+    const res = await listToolingDiffsByMonth(latestCheck.value.checkMonth)
+    diffs.value = res.data || []
+  } catch {
+    diffs.value = []
+  }
+}
 
 const fetchList = async () => {
   loading.value = true
@@ -172,7 +329,9 @@ const handleSubmit = async () => {
     ElMessage.success('清点登记成功')
     dialogVisible.value = false
     fetchList()
-    fetchLatest()
+    fetchAssets()
+    await fetchLatest()
+    fetchDiffs()
   } catch {
     ElMessage.error('清点登记失败')
   } finally {
@@ -182,7 +341,8 @@ const handleSubmit = async () => {
 
 onMounted(() => {
   fetchList()
-  fetchLatest()
+  fetchAssets()
+  fetchLatest().then(fetchDiffs)
 })
 </script>
 
@@ -250,5 +410,128 @@ onMounted(() => {
 .diff-zero {
   color: #909399;
   font-weight: 600;
+}
+
+.region-panel {
+  margin-bottom: 20px;
+}
+
+.region-panel :deep(.el-card__header) {
+  padding: 12px 16px;
+}
+
+.region-panel-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.region-panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.region-panel-sub {
+  font-size: 12px;
+  color: #909399;
+}
+
+.region-panel :deep(.el-collapse-item__header) {
+  height: auto;
+  min-height: 48px;
+  padding: 6px 0;
+  align-items: center;
+}
+
+.region-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding-right: 8px;
+}
+
+.region-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  min-width: 72px;
+}
+
+.region-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.rs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.rs i {
+  font-style: normal;
+  color: #909399;
+  font-size: 12px;
+}
+
+.rs b {
+  font-weight: 700;
+  color: #303133;
+}
+
+.rs.diff-positive b {
+  color: #e6a23c;
+}
+
+.rs.diff-negative b {
+  color: #f56c6c;
+}
+
+.rs.diff-zero b {
+  color: #909399;
+}
+
+.rs-muted b {
+  color: #909399;
+  font-weight: 600;
+}
+
+.not-checked {
+  color: #c0c4cc;
+  font-size: 12px;
+}
+
+.extra-list {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.extra-title {
+  font-size: 12px;
+  color: #909399;
+}
+
+.extra-tag {
+  margin: 0;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin: 4px 0 12px;
+  padding-left: 8px;
+  border-left: 3px solid #409eff;
 }
 </style>

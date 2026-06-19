@@ -40,7 +40,7 @@
     </div>
 
     <el-row :gutter="16" class="card-grid">
-      <el-col v-for="item in list" :key="item.id" :xl="4" :lg="6" :md="8" :sm="12">
+      <el-col v-for="item in listWithSpec" :key="item.id" :xl="4" :lg="6" :md="8" :sm="12">
         <el-card class="asset-card" shadow="hover">
           <div class="card-img-wrapper">
             <img
@@ -61,9 +61,21 @@
           </div>
           <div class="card-body">
             <div class="card-title">{{ item.toolingCode }}</div>
-            <div class="card-info">
-              <span class="info-label">适配产品</span>
-              <span class="info-value">{{ item.productName }}</span>
+            <div class="spec-summary">
+              <div class="spec-row">
+                <span class="spec-label">关键尺寸</span>
+                <span v-if="item.spec.keyDim" class="spec-value">{{ item.spec.keyDim }}</span>
+                <span v-else class="spec-placeholder">未填写</span>
+              </div>
+              <div class="spec-row">
+                <span class="spec-label">定位面</span>
+                <span v-if="item.spec.positioningFace" class="spec-value">{{ item.spec.positioningFace }}</span>
+                <span v-else class="spec-placeholder">未填写</span>
+              </div>
+              <div class="spec-row">
+                <span class="spec-label">适配产品</span>
+                <span class="spec-value">{{ item.spec.product }}</span>
+              </div>
             </div>
             <div class="card-info">
               <span class="info-label">存放工位</span>
@@ -220,7 +232,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -249,6 +261,8 @@ import {
   checkDuplicateAsset,
   getNextLocatorBlockCode,
   validateLocatorBlockCode,
+  getSpecTemplate,
+  listSpecCategories,
 } from '../api/tooling'
 import { batchCompressImages } from '../utils/compress'
 
@@ -313,6 +327,65 @@ const fetchStats = async () => {
     stats.inUse = sc.IN_USE || 0
     stats.transferred = sc.TRANSFERRED || 0
     stats.scrapped = sc.SCRAPPED || 0
+  } catch {
+    /* ignore */
+  }
+}
+
+const specMapByCategory = ref({})
+
+const SPEC_FIELD_ALIASES = {
+  keyDim: ['关键尺寸', 'keyDimension', 'key_dimension', '关键尺寸(mm)', '尺寸'],
+  positioningFace: ['定位面', 'positioningFace', '定位面信息', '定位'],
+  product: ['适配产品', 'productName', '适配产品型号', '产品'],
+}
+
+const pickSpecField = (tmpl, aliases) => {
+  if (!tmpl) return ''
+  for (const k of aliases) {
+    const v = tmpl[k]
+    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v)
+  }
+  return ''
+}
+
+const matchSpecCategory = (productName) => {
+  if (!productName) return null
+  const map = specMapByCategory.value
+  if (map[productName]) return productName
+  let best = null
+  Object.keys(map).forEach((cat) => {
+    if (productName.startsWith(cat) && cat.length > (best ? best.length : 0)) best = cat
+  })
+  return best
+}
+
+const buildSpec = (item) => {
+  const cat = matchSpecCategory(item.productName)
+  const tmpl = cat ? specMapByCategory.value[cat] : null
+  return {
+    keyDim: pickSpecField(tmpl, SPEC_FIELD_ALIASES.keyDim),
+    positioningFace: pickSpecField(tmpl, SPEC_FIELD_ALIASES.positioningFace),
+    product: pickSpecField(tmpl, SPEC_FIELD_ALIASES.product) || item.productName || '',
+  }
+}
+
+const listWithSpec = computed(() =>
+  list.value.map((item) => ({ ...item, spec: buildSpec(item) }))
+)
+
+const fetchSpecTemplates = async () => {
+  try {
+    const catRes = await listSpecCategories()
+    const cats = catRes.data || []
+    const map = {}
+    await Promise.all(
+      cats.map(async (cat) => {
+        const t = await getSpecTemplate(cat)
+        map[cat] = t.data || {}
+      })
+    )
+    specMapByCategory.value = map
   } catch {
     /* ignore */
   }
@@ -663,6 +736,7 @@ const submitScrap = async () => {
 onMounted(() => {
   fetchList()
   fetchStats()
+  fetchSpecTemplates()
 })
 </script>
 
@@ -807,6 +881,40 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.spec-summary {
+  background: #f7f9fc;
+  border: 1px solid #eef2f8;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.spec-row {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+.spec-label {
+  color: #909399;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+
+.spec-value {
+  color: #303133;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spec-placeholder {
+  color: #c0c4cc;
+  font-size: 12px;
 }
 
 .card-actions {
