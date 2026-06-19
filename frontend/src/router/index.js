@@ -31,6 +31,12 @@ const routes = [
         component: () => import('../views/ScrapRecord.vue'),
         meta: { title: '报废归档' },
       },
+      {
+        path: 'trace',
+        name: 'Trace',
+        component: () => import('../views/ToolingTrace.vue'),
+        meta: { title: '轨迹履历' },
+      },
     ],
   },
 ]

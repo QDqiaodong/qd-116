@@ -35,6 +35,10 @@
             <el-icon><Delete /></el-icon>
             <span>报废归档</span>
           </el-menu-item>
+          <el-menu-item index="/trace">
+            <el-icon><Clock /></el-icon>
+            <span>轨迹履历</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main class="main-content">
@@ -47,7 +51,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Box, Switch, Checked, Delete, SetUp } from '@element-plus/icons-vue'
+import { Box, Switch, Checked, Delete, SetUp, Clock } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activeMenu = computed(() => route.path)

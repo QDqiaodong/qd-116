@@ -14,6 +14,8 @@ import java.util.Optional;
 public class InventoryService {
 
     private final InventoryCheckRepository inventoryCheckRepository;
+    private final ToolingInventoryDiffRepository toolingInventoryDiffRepository;
+    private final ToolingAssetRepository toolingAssetRepository;
 
     public InventoryCheck check(String checkMonth, Integer totalBook, Integer totalActual, String checker, String remark) {
         Integer difference = totalActual - totalBook;
@@ -27,6 +29,48 @@ public class InventoryService {
                 .remark(remark)
                 .build();
         return inventoryCheckRepository.save(inventoryCheck);
+    }
+
+    public ToolingInventoryDiff recordToolingDiff(String checkMonth, String toolingCode,
+                                                   Boolean bookExists, Boolean actualExists,
+                                                   String checker, String remark) {
+        String diffType;
+        if (Boolean.TRUE.equals(bookExists) && Boolean.FALSE.equals(actualExists)) {
+            diffType = "MISSING";
+        } else if (Boolean.FALSE.equals(bookExists) && Boolean.TRUE.equals(actualExists)) {
+            diffType = "EXTRA";
+        } else if (Boolean.TRUE.equals(bookExists) && Boolean.TRUE.equals(actualExists)) {
+            diffType = "MATCH";
+        } else {
+            diffType = "UNKNOWN";
+        }
+        String workstation = null;
+        Optional<ToolingAsset> assetOpt = toolingAssetRepository.findByToolingCode(toolingCode);
+        if (assetOpt.isPresent()) {
+            workstation = assetOpt.get().getWorkstation();
+        }
+        ToolingInventoryDiff diff = ToolingInventoryDiff.builder()
+                .checkMonth(checkMonth)
+                .toolingCode(toolingCode)
+                .bookExists(bookExists)
+                .actualExists(actualExists)
+                .diffType(diffType)
+                .checker(checker)
+                .checkTime(LocalDateTime.now())
+                .workstation(workstation)
+                .remark(remark)
+                .build();
+        return toolingInventoryDiffRepository.save(diff);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ToolingInventoryDiff> listToolingDiffs(String toolingCode) {
+        return toolingInventoryDiffRepository.findByToolingCodeOrderByCheckTimeDesc(toolingCode);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ToolingInventoryDiff> listToolingDiffsByMonth(String checkMonth) {
+        return toolingInventoryDiffRepository.findByCheckMonth(checkMonth);
     }
 
     @Transactional(readOnly = true)

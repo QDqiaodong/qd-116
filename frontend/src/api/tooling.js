@@ -83,3 +83,15 @@ export function deleteSpecTemplate(category) {
 export function listSpecCategories() {
   return request.get('/spec-template/categories')
 }
+
+export function getToolingTrace(toolingCode) {
+  return request.get(`/trace/${toolingCode}`)
+}
+
+export function recordToolingDiff(params) {
+  return request.post('/inventory/diff', null, { params })
+}
+
+export function listToolingDiffs(toolingCode) {
+  return request.get(`/inventory/diff/${toolingCode}`)
+}

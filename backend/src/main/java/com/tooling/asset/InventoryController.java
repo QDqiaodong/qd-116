@@ -2,6 +2,7 @@ package com.tooling.asset;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,6 +25,27 @@ public class InventoryController {
             @RequestParam String checker,
             @RequestParam(required = false) String remark) {
         return Result.ok(inventoryService.check(checkMonth, totalBook, totalActual, checker, remark));
+    }
+
+    @PostMapping("/diff")
+    public Result<ToolingInventoryDiff> recordToolingDiff(
+            @RequestParam String checkMonth,
+            @RequestParam String toolingCode,
+            @RequestParam(required = false) Boolean bookExists,
+            @RequestParam(required = false) Boolean actualExists,
+            @RequestParam String checker,
+            @RequestParam(required = false) String remark) {
+        return Result.ok(inventoryService.recordToolingDiff(checkMonth, toolingCode, bookExists, actualExists, checker, remark));
+    }
+
+    @GetMapping("/diff/{toolingCode}")
+    public Result<List<ToolingInventoryDiff>> listToolingDiffs(@PathVariable String toolingCode) {
+        return Result.ok(inventoryService.listToolingDiffs(toolingCode));
+    }
+
+    @GetMapping("/diff/month/{checkMonth}")
+    public Result<List<ToolingInventoryDiff>> listToolingDiffsByMonth(@PathVariable String checkMonth) {
+        return Result.ok(inventoryService.listToolingDiffsByMonth(checkMonth));
     }
 
     @GetMapping("/list")

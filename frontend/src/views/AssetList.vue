@@ -76,6 +76,7 @@
           </div>
           <div class="card-actions">
             <el-button size="small" :icon="Edit" @click="openDialog(item)">编辑</el-button>
+            <el-button size="small" type="primary" :icon="Clock" @click="viewTrace(item)">轨迹</el-button>
             <el-button size="small" type="warning" :icon="Switch" @click="handleTransfer(item)" :disabled="item.status !== 'IN_USE'">移位</el-button>
             <el-button size="small" type="danger" :icon="CircleClose" @click="handleScrap(item)" :disabled="item.status === 'SCRAPPED'">报废</el-button>
             <el-button size="small" type="info" :icon="Delete" @click="handleDelete(item)"></el-button>
@@ -195,6 +196,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Search,
@@ -204,6 +206,7 @@ import {
   Switch,
   CircleClose,
   Picture,
+  Clock,
 } from '@element-plus/icons-vue'
 import {
   listAssets,
@@ -216,6 +219,8 @@ import {
   scrapTooling,
 } from '../api/tooling'
 import { batchCompressImages } from '../utils/compress'
+
+const router = useRouter()
 
 const workstationOptions = [
   '注塑机01', '注塑机02', '注塑机03', '注塑机04',
@@ -374,6 +379,10 @@ const handleDelete = async (item) => {
   } catch {
     /* cancelled or failed */
   }
+}
+
+const viewTrace = (item) => {
+  router.push({ path: '/trace', query: { code: item.toolingCode } })
 }
 
 const transferVisible = ref(false)

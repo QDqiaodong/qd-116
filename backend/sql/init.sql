@@ -44,6 +44,21 @@ CREATE TABLE IF NOT EXISTS scrap_record (
     remark VARCHAR(500)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS tooling_inventory_diff (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    check_month VARCHAR(7) NOT NULL,
+    tooling_code VARCHAR(50) NOT NULL,
+    book_exists TINYINT(1),
+    actual_exists TINYINT(1),
+    diff_type VARCHAR(20),
+    checker VARCHAR(50),
+    check_time DATETIME,
+    workstation VARCHAR(50),
+    remark VARCHAR(500),
+    INDEX idx_tooling_code (tooling_code),
+    INDEX idx_check_month (check_month)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO tooling_asset (tooling_code, product_name, workstation, entry_date, status, remark) VALUES
 ('TL-2024-001', '定位块A型', '注塑机01', '2024-01-15', 'IN_USE', '标准定位块'),
 ('TL-2024-002', '定位块B型', '注塑机02', '2024-03-20', 'IN_USE', '大型定位块'),
