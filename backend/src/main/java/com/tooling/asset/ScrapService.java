@@ -18,6 +18,16 @@ public class ScrapService {
     public ScrapRecord scrap(String toolingCode, String scrapReason, java.time.LocalDate scrapDate, String operator, String remark) {
         ToolingAsset asset = toolingAssetRepository.findByToolingCode(toolingCode)
                 .orElseThrow(() -> new RuntimeException("工装不存在: " + toolingCode));
+
+        if (ToolingStatus.SCRAPPED.equals(asset.getStatus())) {
+            throw new RuntimeException("工装已报废，不允许重复报废: " + toolingCode);
+        }
+
+        List<ScrapRecord> existingScraps = scrapRecordRepository.findByToolingCodeOrderByScrapDateDesc(toolingCode);
+        if (existingScraps != null && !existingScraps.isEmpty()) {
+            throw new RuntimeException("该工装已有报废记录，不允许重复提交: " + toolingCode);
+        }
+
         asset.setStatus(ToolingStatus.SCRAPPED);
         asset.setUpdateTime(LocalDateTime.now());
         toolingAssetRepository.save(asset);

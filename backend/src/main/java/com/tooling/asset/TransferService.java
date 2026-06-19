@@ -18,6 +18,17 @@ public class TransferService {
     public TransferRecord transfer(String toolingCode, String fromWorkstation, String toWorkstation, String operator, String remark) {
         ToolingAsset asset = toolingAssetRepository.findByToolingCode(toolingCode)
                 .orElseThrow(() -> new RuntimeException("工装不存在: " + toolingCode));
+
+        if (ToolingStatus.SCRAPPED.equals(asset.getStatus())) {
+            throw new RuntimeException("已报废工装不允许移位: " + toolingCode);
+        }
+
+        String actualFromWorkstation = asset.getWorkstation();
+
+        if (actualFromWorkstation != null && actualFromWorkstation.equals(toWorkstation)) {
+            throw new RuntimeException("目标工位与当前工位相同，无需移位");
+        }
+
         asset.setWorkstation(toWorkstation);
         asset.setStatus(ToolingStatus.TRANSFERRED);
         asset.setUpdateTime(LocalDateTime.now());
@@ -25,7 +36,7 @@ public class TransferService {
 
         TransferRecord record = TransferRecord.builder()
                 .toolingCode(toolingCode)
-                .fromWorkstation(fromWorkstation)
+                .fromWorkstation(actualFromWorkstation)
                 .toWorkstation(toWorkstation)
                 .transferTime(LocalDateTime.now())
                 .operator(operator)
