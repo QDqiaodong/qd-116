@@ -99,3 +99,15 @@ export function recordToolingDiff(params) {
 export function listToolingDiffs(toolingCode) {
   return request.get(`/inventory/diff/${toolingCode}`)
 }
+
+export function getNextLocatorBlockCode() {
+  return request.get('/code-rule/locator-block/next')
+}
+
+export function validateLocatorBlockCode(toolingCode) {
+  return request.post('/code-rule/locator-block/validate', null, { params: { toolingCode } })
+}
+
+export function getLocatorBlockCodeInfo() {
+  return request.get('/code-rule/locator-block/info')
+}

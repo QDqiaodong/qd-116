@@ -95,7 +95,32 @@
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="工装编号" prop="toolingCode">
-          <el-input v-model="form.toolingCode" placeholder="请输入工装编号" />
+          <div style="display:flex;gap:8px;width:100%;align-items:flex-start;">
+            <el-input
+              v-model="form.toolingCode"
+              placeholder="请输入工装编号，格式：TL-YYYY-XXX"
+              style="flex:1"
+              @blur="handleCodeBlur"
+              @input="handleCodeInput"
+            />
+            <el-button type="primary" plain :icon="MagicStick" @click="generateNextCode">自动生成</el-button>
+          </div>
+          <div v-if="codeValidation.message" class="code-validation-tip" :class="{ valid: codeValidation.valid, invalid: !codeValidation.valid }">
+            <el-icon v-if="!codeValidation.valid" class="tip-icon"><Warning /></el-icon>
+            <el-icon v-else class="tip-icon"><CircleCheck /></el-icon>
+            <span class="tip-text">{{ codeValidation.message }}</span>
+            <el-link
+              v-if="codeValidation.suggestedCode && !isEdit"
+              type="primary"
+              :underline="false"
+              style="margin-left:8px;"
+              @click="applySuggestedCode"
+            >使用推荐编号</el-link>
+          </div>
+          <div class="code-format-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>定位块编号规则：TL-年份-3位流水号（如 TL-{{ currentYear }}-001）</span>
+          </div>
         </el-form-item>
         <el-form-item label="适配产品" prop="productName">
           <el-input v-model="form.productName" placeholder="请输入适配产品" />
@@ -207,6 +232,10 @@ import {
   CircleClose,
   Picture,
   Clock,
+  MagicStick,
+  Warning,
+  CircleCheck,
+  InfoFilled,
 } from '@element-plus/icons-vue'
 import {
   listAssets,
@@ -218,6 +247,8 @@ import {
   transferTooling,
   scrapTooling,
   checkDuplicateAsset,
+  getNextLocatorBlockCode,
+  validateLocatorBlockCode,
 } from '../api/tooling'
 import { batchCompressImages } from '../utils/compress'
 
@@ -228,6 +259,18 @@ const workstationOptions = [
   '注塑机05', '注塑机06', '注塑机07', '注塑机08',
   '模具库A区', '模具库B区', '待检区', '维修区',
 ]
+
+const currentYear = new Date().getFullYear()
+
+const codeValidation = reactive({
+  valid: false,
+  formatValid: false,
+  exists: false,
+  message: '',
+  suggestedCode: '',
+})
+
+let codeValidateTimer = null
 
 const statusLabel = (status) => {
   const map = { IN_USE: '在用', TRANSFERRED: '已移位', SCRAPPED: '已报废' }
@@ -301,6 +344,7 @@ const rules = {
 
 const openDialog = (item) => {
   isEdit.value = !!item
+  resetCodeValidation()
   if (item) {
     editId.value = item.id
     Object.assign(form, {
@@ -329,6 +373,71 @@ const openDialog = (item) => {
     fileList.value = []
   }
   dialogVisible.value = true
+}
+
+const resetCodeValidation = () => {
+  codeValidation.valid = false
+  codeValidation.formatValid = false
+  codeValidation.exists = false
+  codeValidation.message = ''
+  codeValidation.suggestedCode = ''
+}
+
+const generateNextCode = async () => {
+  try {
+    const res = await getNextLocatorBlockCode()
+    if (res.data) {
+      form.toolingCode = res.data
+      await validateCode(res.data)
+    }
+  } catch {
+    ElMessage.error('生成编号失败')
+  }
+}
+
+const applySuggestedCode = async () => {
+  if (codeValidation.suggestedCode) {
+    form.toolingCode = codeValidation.suggestedCode
+    await validateCode(codeValidation.suggestedCode)
+  }
+}
+
+const validateCode = async (code) => {
+  if (!code || !code.trim()) {
+    resetCodeValidation()
+    return
+  }
+  try {
+    const res = await validateLocatorBlockCode(code.trim())
+    const data = res.data || {}
+    codeValidation.valid = data.valid || false
+    codeValidation.formatValid = data.formatValid || false
+    codeValidation.exists = data.exists || false
+    codeValidation.message = data.message || ''
+    codeValidation.suggestedCode = data.suggestedCode || ''
+  } catch {
+    resetCodeValidation()
+  }
+}
+
+const handleCodeInput = () => {
+  if (codeValidateTimer) {
+    clearTimeout(codeValidateTimer)
+    codeValidateTimer = null
+  }
+  if (!form.toolingCode || !form.toolingCode.trim()) {
+    resetCodeValidation()
+    return
+  }
+  codeValidateTimer = setTimeout(() => {
+    validateCode(form.toolingCode)
+  }, 500)
+}
+
+const handleCodeBlur = () => {
+  if (form.toolingCode && form.toolingCode.trim()) {
+    validateCode(form.toolingCode)
+  }
 }
 
 const prepareImage = async () => {
@@ -712,5 +821,46 @@ onMounted(() => {
 .card-actions .el-button {
   flex: 1;
   min-width: 0;
+}
+
+.code-validation-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.code-validation-tip.invalid {
+  color: #f56c6c;
+}
+
+.code-validation-tip.valid {
+  color: #67c23a;
+}
+
+.tip-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 14px;
+}
+
+.tip-text {
+  flex: 1;
+}
+
+.code-format-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.code-format-hint .el-icon {
+  font-size: 14px;
+  color: #409eff;
 }
 </style>

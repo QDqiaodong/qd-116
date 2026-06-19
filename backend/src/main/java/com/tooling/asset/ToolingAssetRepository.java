@@ -2,6 +2,8 @@ package com.tooling.asset;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -21,4 +23,9 @@ public interface ToolingAssetRepository extends JpaRepository<ToolingAsset, Long
             LocalDate startDate,
             LocalDate endDate
     );
+
+    @Query("SELECT MAX(t.toolingCode) FROM ToolingAsset t WHERE t.toolingCode LIKE :prefix%")
+    String findMaxCodeByPrefix(@Param("prefix") String prefix);
+
+    boolean existsByToolingCode(String toolingCode);
 }
