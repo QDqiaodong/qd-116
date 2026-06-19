@@ -8,16 +8,11 @@
 ARG DOCKER_REGISTRY
 
 # ============================================================
-# Stage 1: 构建阶段 - JDK + Maven 编译项目
+# Stage 1: 构建阶段 - Maven 编译项目
 # ============================================================
-FROM ${DOCKER_REGISTRY}/library/eclipse-temurin:17-jdk AS builder
+FROM ${DOCKER_REGISTRY}/library/maven:3.9-eclipse-temurin-17 AS builder
 
 WORKDIR /app
-
-# 安装 Maven（使用 apt 国内镜像源加速）
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends maven && \
-    rm -rf /var/lib/apt/lists/*
 
 # 复制 Maven 配置文件（阿里云镜像源）
 COPY settings.xml /root/.m2/settings.xml
@@ -26,18 +21,10 @@ COPY settings.xml /root/.m2/settings.xml
 # 只要 pom.xml 不变，就不会重新下载依赖
 COPY pom.xml ./
 
-# 创建最小目录结构和占位符 Main 类，执行一次完整的 Maven 构建来下载所有依赖
-# 这是最可靠的预下载方式，比 go-offline 更完整
-RUN mkdir -p src/main/java/com/tooling/asset && \
-    printf 'package com.tooling.asset;\nimport org.springframework.boot.SpringApplication;\nimport org.springframework.boot.autoconfigure.SpringBootApplication;\n@SpringBootApplication\npublic class ToolingAssetApplication { public static void main(String[] args) { SpringApplication.run(ToolingAssetApplication.class, args); } }\n' > src/main/java/com/tooling/asset/ToolingAssetApplication.java && \
-    mkdir -p src/main/resources && \
-    printf 'server.port=8099\nspring.jpa.hibernate.ddl-auto=none\nspring.jpa.show-sql=false\n' > src/main/resources/application.yml && \
-    mvn package -DskipTests -B \
-        -Dmaven.wagon.http.retryHandler.count=10 \
-        -Dmaven.wagon.httpconnectionManager.ttlSeconds=30
-
-# 删除占位符代码，准备复制真实源码
-RUN rm -rf src target
+# 依赖层：仅 pom/settings 变化时重新下载依赖
+RUN mvn dependency:go-offline -DskipTests -B \
+    -Dmaven.wagon.http.retryHandler.count=10 \
+    -Dmaven.wagon.httpconnectionManager.ttlSeconds=30
 
 # 复制所有业务源码（仅修改源码时，仅从此层开始重新构建）
 COPY src ./src
