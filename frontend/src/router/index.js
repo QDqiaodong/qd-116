@@ -14,6 +14,18 @@ const routes = [
         meta: { title: '工装台账' },
       },
       {
+        path: 'board',
+        name: 'Board',
+        component: () => import('../views/WorkstationBoard.vue'),
+        meta: { title: '工位看板' },
+      },
+      {
+        path: 'floor-plan',
+        name: 'FloorPlan',
+        component: () => import('../views/FloorPlanBoard.vue'),
+        meta: { title: '平面看板' },
+      },
+      {
         path: 'transfer',
         name: 'Transfer',
         component: () => import('../views/TransferRecord.vue'),

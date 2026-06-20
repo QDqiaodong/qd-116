@@ -23,6 +23,14 @@
             <el-icon><Box /></el-icon>
             <span>工装台账</span>
           </el-menu-item>
+          <el-menu-item index="/board">
+            <el-icon><Grid /></el-icon>
+            <span>工位看板</span>
+          </el-menu-item>
+          <el-menu-item index="/floor-plan">
+            <el-icon><Position /></el-icon>
+            <span>平面看板</span>
+          </el-menu-item>
           <el-menu-item index="/transfer">
             <el-icon><Switch /></el-icon>
             <span>移位登记</span>
@@ -51,7 +59,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Box, Switch, Checked, Delete, SetUp, Clock } from '@element-plus/icons-vue'
+import { Box, Switch, Checked, Delete, SetUp, Clock, Grid, Position } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activeMenu = computed(() => route.path)
