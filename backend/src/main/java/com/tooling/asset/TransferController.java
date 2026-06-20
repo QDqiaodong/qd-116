@@ -36,4 +36,9 @@ public class TransferController {
     public Result<List<TransferRecord>> listByTooling(@PathVariable String toolingCode) {
         return Result.ok(transferService.listByTooling(toolingCode));
     }
+
+    @GetMapping("/{toolingCode}/stays")
+    public Result<List<WorkstationStayVO>> getWorkstationStays(@PathVariable String toolingCode) {
+        return Result.ok(transferService.getWorkstationStays(toolingCode));
+    }
 }

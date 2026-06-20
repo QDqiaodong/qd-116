@@ -680,8 +680,8 @@ const submitTransfer = async () => {
     transferVisible.value = false
     fetchList()
     fetchStats()
-  } catch {
-    ElMessage.error('移位失败')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || '移位失败')
   } finally {
     submitting.value = false
   }

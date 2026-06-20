@@ -58,15 +58,84 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="historyDialogVisible" title="移位历史" width="700px" destroy-on-close>
-      <el-table :data="historyData" v-loading="historyLoading" border stripe style="width: 100%">
-        <el-table-column prop="fromWorkstation" label="原工位" min-width="100" />
-        <el-table-column prop="toWorkstation" label="新工位" min-width="100" />
-        <el-table-column prop="transferTime" label="移位时间" min-width="160" />
-        <el-table-column prop="operator" label="操作人" min-width="100" />
-        <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
-      </el-table>
-      <el-empty v-if="!historyData.length && !historyLoading" description="暂无移位记录" />
+    <el-dialog v-model="historyDialogVisible" title="移位历史" width="760px" destroy-on-close>
+      <div v-loading="historyLoading" class="history-content">
+        <div v-if="stayData.length" class="stay-path-section">
+          <div class="section-title">
+            <el-icon :size="16"><Position /></el-icon>
+            <span>工位路径</span>
+          </div>
+          <div class="path-flow">
+            <div
+              v-for="(stay, idx) in stayData"
+              :key="stay.sequence"
+              class="path-node"
+              :class="{ 'is-current': idx === stayData.length - 1 }"
+            >
+              <div class="node-badge">{{ stay.sequence }}</div>
+              <div class="node-name">{{ stay.workstation }}</div>
+              <div class="node-days">{{ stay.stayDays }}天</div>
+              <div v-if="idx < stayData.length - 1" class="node-arrow">
+                <el-icon><Right /></el-icon>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="stayData.length" class="stay-list-section">
+          <div class="section-title">
+            <el-icon :size="16"><Clock /></el-icon>
+            <span>停留明细</span>
+            <span class="stay-count">共 {{ stayData.length }} 段停留</span>
+          </div>
+          <div class="stay-list">
+            <div
+              v-for="(stay, idx) in stayData"
+              :key="stay.sequence"
+              class="stay-item"
+              :class="{ 'is-current': idx === stayData.length - 1 }"
+            >
+              <div class="stay-left">
+                <div class="stay-seq">
+                  <span class="seq-badge">{{ stay.sequence }}</span>
+                </div>
+                <div class="stay-timeline">
+                  <div class="timeline-dot"></div>
+                  <div v-if="idx < stayData.length - 1" class="timeline-line"></div>
+                </div>
+              </div>
+              <div class="stay-body">
+                <div class="stay-header">
+                  <span class="stay-workstation">{{ stay.workstation }}</span>
+                  <el-tag v-if="idx === stayData.length - 1" type="success" size="small">当前位置</el-tag>
+                </div>
+                <div class="stay-info">
+                  <span class="info-item">
+                    <el-icon><Calendar /></el-icon>
+                    开始：{{ formatDateTime(stay.startTime) }}
+                  </span>
+                  <span class="info-item">
+                    <el-icon><Calendar /></el-icon>
+                    结束：{{ formatDateTime(stay.endTime) }}
+                  </span>
+                </div>
+                <div class="stay-meta">
+                  <span class="meta-tag">
+                    <el-icon><Timer /></el-icon>
+                    停留 {{ stay.stayDays }} 天
+                  </span>
+                  <span v-if="stay.lastOperator" class="meta-tag">
+                    <el-icon><User /></el-icon>
+                    最近操作：{{ stay.lastOperator }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <el-empty v-if="!stayData.length && !historyLoading" description="暂无移位记录" />
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -74,8 +143,9 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Plus } from '@element-plus/icons-vue'
-import { listTransfers, getTransferHistory, transferTooling } from '../api/tooling'
+import { Search, Plus, Clock, User, Calendar, Timer, Position, Right } from '@element-plus/icons-vue'
+import dayjs from 'dayjs'
+import { listTransfers, getTransferHistory, transferTooling, getWorkstationStays } from '../api/tooling'
 
 const workstationOptions = [
   '注塑机01', '注塑机02', '注塑机03', '注塑机04',
@@ -153,8 +223,8 @@ const submitTransfer = async () => {
     ElMessage.success('移位登记成功')
     transferDialogVisible.value = false
     fetchList()
-  } catch {
-    ElMessage.error('移位登记失败')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || '移位登记失败')
   } finally {
     submitting.value = false
   }
@@ -163,15 +233,25 @@ const submitTransfer = async () => {
 const historyDialogVisible = ref(false)
 const historyLoading = ref(false)
 const historyData = ref([])
+const stayData = ref([])
+
+const formatDateTime = (t) => {
+  if (!t) return '-'
+  return dayjs(t).format('YYYY-MM-DD HH:mm')
+}
 
 const viewHistory = async (toolingCode) => {
   historyDialogVisible.value = true
   historyLoading.value = true
   try {
-    const res = await getTransferHistory(toolingCode)
-    historyData.value = res.data || []
-  } catch {
-    ElMessage.error('获取移位历史失败')
+    const [transferRes, staysRes] = await Promise.all([
+      getTransferHistory(toolingCode),
+      getWorkstationStays(toolingCode),
+    ])
+    historyData.value = transferRes.data || []
+    stayData.value = staysRes.data || []
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || '获取移位历史失败')
   } finally {
     historyLoading.value = false
   }
@@ -201,5 +281,250 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.history-content {
+  min-height: 200px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.stay-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: #909399;
+}
+
+.stay-path-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f7f9fc;
+  border-radius: 8px;
+}
+
+.path-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.path-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 80px;
+  position: relative;
+  padding: 10px 8px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  transition: all 0.2s;
+}
+
+.path-node:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+}
+
+.path-node.is-current {
+  background: #f0f9eb;
+  border-color: #67c23a;
+}
+
+.node-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #409eff;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.path-node.is-current .node-badge {
+  background: #67c23a;
+}
+
+.node-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #303133;
+  text-align: center;
+  word-break: break-all;
+  max-width: 80px;
+}
+
+.node-days {
+  font-size: 11px;
+  color: #909399;
+}
+
+.path-node.is-current .node-days {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.node-arrow {
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #c0c4cc;
+  z-index: 1;
+  font-size: 14px;
+}
+
+.stay-list-section {
+  margin-bottom: 8px;
+}
+
+.stay-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.stay-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px dashed #f0f0f0;
+}
+
+.stay-item:last-child {
+  border-bottom: none;
+}
+
+.stay-item.is-current .stay-body {
+  background: #f0f9eb;
+}
+
+.stay-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 36px;
+}
+
+.stay-seq {
+  margin-bottom: 4px;
+}
+
+.seq-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #409eff;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stay-item.is-current .seq-badge {
+  background: #67c23a;
+}
+
+.stay-timeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.timeline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c0c4cc;
+  flex-shrink: 0;
+}
+
+.stay-item.is-current .timeline-dot {
+  background: #67c23a;
+}
+
+.timeline-line {
+  width: 2px;
+  flex: 1;
+  background: #ebeef5;
+  margin-top: 4px;
+}
+
+.stay-body {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.stay-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.stay-workstation {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.stay-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.stay-info .info-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.stay-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.meta-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #ecf5ff;
+  color: #409eff;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.stay-item.is-current .meta-tag {
+  background: #e1f3d8;
+  color: #67c23a;
 }
 </style>

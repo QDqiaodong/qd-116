@@ -8,5 +8,7 @@ public interface TransferRecordRepository extends JpaRepository<TransferRecord, 
 
     List<TransferRecord> findByToolingCodeOrderByTransferTimeDesc(String toolingCode);
 
+    List<TransferRecord> findByToolingCodeOrderByTransferTimeAsc(String toolingCode);
+
     long deleteByToolingCode(String toolingCode);
 }

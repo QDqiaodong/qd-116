@@ -40,6 +40,10 @@ export function getTransferHistory(toolingCode) {
   return request.get(`/transfer/${toolingCode}`)
 }
 
+export function getWorkstationStays(toolingCode) {
+  return request.get(`/transfer/${toolingCode}/stays`)
+}
+
 export function createCheck(params) {
   return request.post('/inventory', null, { params })
 }
