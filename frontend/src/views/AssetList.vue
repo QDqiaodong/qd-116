@@ -711,18 +711,46 @@ const handleScrap = (item) => {
   scrapVisible.value = true
 }
 
+const buildDuplicateScrapMessage = (data) => {
+  if (!data) return '该工装已报废，不允许重复提交。'
+  let html = '<div style="color:#e6a23c;font-weight:600;margin-bottom:10px;">⚠️ 该工装已存在报废记录</div>'
+  html += '<div style="margin-bottom:10px;">不允许重复提交，已有报废信息如下：</div>'
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+  html += '<tr><td style="padding:4px 8px;color:#909399;width:80px;">工装编号</td><td style="padding:4px 8px;">' + (data.toolingCode || '-') + '</td></tr>'
+  html += '<tr><td style="padding:4px 8px;color:#909399;">报废日期</td><td style="padding:4px 8px;">' + (data.scrapDate || '-') + '</td></tr>'
+  html += '<tr><td style="padding:4px 8px;color:#909399;">报废原因</td><td style="padding:4px 8px;">' + (data.scrapReason || '-') + '</td></tr>'
+  html += '<tr><td style="padding:4px 8px;color:#909399;">操作人</td><td style="padding:4px 8px;">' + (data.operator || '-') + '</td></tr>'
+  if (data.remark) {
+    html += '<tr><td style="padding:4px 8px;color:#909399;">备注</td><td style="padding:4px 8px;">' + data.remark + '</td></tr>'
+  }
+  html += '</table>'
+  return html
+}
+
 const submitScrap = async () => {
   const valid = await scrapFormRef.value.validate().catch(() => false)
   if (!valid) return
   submitting.value = true
   try {
-    await scrapTooling({
+    const res = await scrapTooling({
       toolingCode: currentItem.value.toolingCode,
       scrapReason: scrapForm.scrapReason,
       scrapDate: scrapForm.scrapDate,
       operator: scrapForm.operator,
       remark: scrapForm.remark,
     })
+    if (res && res.code === 409) {
+      await ElMessageBox({
+        title: '重复报废提醒',
+        dangerouslyUseHTMLString: true,
+        message: buildDuplicateScrapMessage(res.data),
+        confirmButtonText: '我知道了',
+        showCancelButton: false,
+        type: 'warning',
+      })
+      submitting.value = false
+      return
+    }
     ElMessage.success('报废成功')
     scrapVisible.value = false
     fetchList()
