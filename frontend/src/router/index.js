@@ -38,6 +38,12 @@ const routes = [
         meta: { title: '实物清点' },
       },
       {
+        path: 'inventory-workbench',
+        name: 'InventoryWorkbench',
+        component: () => import('../views/InventoryWorkbench.vue'),
+        meta: { title: '清点工作台' },
+      },
+      {
         path: 'inventory-diff-closure',
         name: 'InventoryDiffClosure',
         component: () => import('../views/InventoryDiffClosure.vue'),
