@@ -297,6 +297,7 @@ import {
   handleScrap,
   getLatestCheck,
 } from '../api/tooling'
+import dayjs from 'dayjs'
 
 const loading = ref(false)
 const actionLoading = ref(false)
@@ -424,7 +425,7 @@ const handleAction = async (cmd, row) => {
     correctDialogVisible.value = true
   } else if (cmd === 'scrap') {
     scrapForm.scrapReason = ''
-    scrapForm.scrapDate = new Date().toISOString().slice(0, 10)
+    scrapForm.scrapDate = dayjs().format('YYYY-MM-DD')
     scrapForm.handler = ''
     scrapForm.handleRemark = ''
     scrapDialogVisible.value = true

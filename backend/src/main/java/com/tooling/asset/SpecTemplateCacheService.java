@@ -18,8 +18,22 @@ public class SpecTemplateCacheService {
 
     public void saveTemplate(String category, Map<String, String> specMap) {
         String key = KEY_PREFIX + ":" + category;
-        Map<String, Object> hashMap = new HashMap<>(specMap);
-        redisTemplate.opsForHash().putAll(key, hashMap);
+        boolean hasValidField = false;
+        Map<String, Object> hashMap = new HashMap<>();
+        if (specMap != null && !specMap.isEmpty()) {
+            for (Map.Entry<String, String> entry : specMap.entrySet()) {
+                String k = entry.getKey();
+                String v = entry.getValue();
+                if (k != null && !k.trim().isEmpty() && v != null && !v.trim().isEmpty()) {
+                    hashMap.put(k.trim(), v.trim());
+                    hasValidField = true;
+                }
+            }
+        }
+        redisTemplate.delete(key);
+        if (hasValidField) {
+            redisTemplate.opsForHash().putAll(key, hashMap);
+        }
     }
 
     public Map<Object, Object> getTemplate(String category) {

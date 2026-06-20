@@ -147,7 +147,7 @@
             v-model="form.entryDate"
             type="date"
             placeholder="选择日期"
-            value-format="yyyy-MM-dd"
+            value-format="YYYY-MM-DD"
             style="width: 100%"
           />
         </el-form-item>
@@ -212,7 +212,7 @@
             v-model="scrapForm.scrapDate"
             type="date"
             placeholder="选择报废日期"
-            value-format="yyyy-MM-dd"
+            value-format="YYYY-MM-DD"
             style="width: 100%"
           />
         </el-form-item>
@@ -265,6 +265,7 @@ import {
   listSpecCategories,
 } from '../api/tooling'
 import { batchCompressImages } from '../utils/compress'
+import dayjs from 'dayjs'
 
 const router = useRouter()
 
@@ -704,7 +705,7 @@ const scrapRules = {
 const handleScrap = (item) => {
   currentItem.value = item
   scrapForm.scrapReason = ''
-  scrapForm.scrapDate = new Date().toISOString().split('T')[0]
+  scrapForm.scrapDate = dayjs().format('YYYY-MM-DD')
   scrapForm.operator = ''
   scrapForm.remark = ''
   scrapVisible.value = true
