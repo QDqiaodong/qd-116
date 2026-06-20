@@ -22,6 +22,9 @@ public class ToolingAssetService {
     private static final int ENTRY_DATE_TOLERANCE_DAYS = 7;
 
     private final ToolingAssetRepository toolingAssetRepository;
+    private final TransferRecordRepository transferRecordRepository;
+    private final ToolingInventoryDiffRepository toolingInventoryDiffRepository;
+    private final ScrapRecordRepository scrapRecordRepository;
 
     public DuplicateCheckResult checkDuplicate(ToolingAsset asset) {
         boolean codeDuplicate = toolingAssetRepository.findByToolingCode(asset.getToolingCode()).isPresent();
@@ -109,7 +112,13 @@ public class ToolingAssetService {
     }
 
     public void deleteAsset(Long id) {
-        toolingAssetRepository.deleteById(id);
+        ToolingAsset asset = toolingAssetRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("工装不存在: " + id));
+        String toolingCode = asset.getToolingCode();
+        transferRecordRepository.deleteByToolingCode(toolingCode);
+        toolingInventoryDiffRepository.deleteByToolingCode(toolingCode);
+        scrapRecordRepository.deleteByToolingCode(toolingCode);
+        toolingAssetRepository.delete(asset);
     }
 
     @Transactional(readOnly = true)

@@ -9,4 +9,6 @@ public interface ToolingInventoryDiffRepository extends JpaRepository<ToolingInv
     List<ToolingInventoryDiff> findByToolingCodeOrderByCheckTimeDesc(String toolingCode);
 
     List<ToolingInventoryDiff> findByCheckMonth(String checkMonth);
+
+    long deleteByToolingCode(String toolingCode);
 }

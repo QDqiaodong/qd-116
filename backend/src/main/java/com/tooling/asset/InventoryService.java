@@ -19,15 +19,16 @@ public class InventoryService {
 
     public InventoryCheck check(String checkMonth, Integer totalBook, Integer totalActual, String checker, String remark) {
         Integer difference = totalActual - totalBook;
-        InventoryCheck inventoryCheck = InventoryCheck.builder()
-                .checkMonth(checkMonth)
-                .totalBook(totalBook)
-                .totalActual(totalActual)
-                .difference(difference)
-                .checker(checker)
-                .checkTime(LocalDateTime.now())
-                .remark(remark)
-                .build();
+        InventoryCheck inventoryCheck = inventoryCheckRepository
+                .findTopByCheckMonthOrderByCheckTimeDesc(checkMonth)
+                .orElseGet(InventoryCheck::new);
+        inventoryCheck.setCheckMonth(checkMonth);
+        inventoryCheck.setTotalBook(totalBook);
+        inventoryCheck.setTotalActual(totalActual);
+        inventoryCheck.setDifference(difference);
+        inventoryCheck.setChecker(checker);
+        inventoryCheck.setCheckTime(LocalDateTime.now());
+        inventoryCheck.setRemark(remark);
         return inventoryCheckRepository.save(inventoryCheck);
     }
 
@@ -75,7 +76,7 @@ public class InventoryService {
 
     @Transactional(readOnly = true)
     public List<InventoryCheck> listByMonth(String checkMonth) {
-        return inventoryCheckRepository.findByCheckMonth(checkMonth)
+        return inventoryCheckRepository.findTopByCheckMonthOrderByCheckTimeDesc(checkMonth)
                 .map(List::of)
                 .orElse(List.of());
     }
@@ -87,6 +88,6 @@ public class InventoryService {
 
     @Transactional(readOnly = true)
     public Optional<InventoryCheck> getLatestCheck() {
-        return inventoryCheckRepository.findTopByOrderByCheckTimeDesc();
+        return inventoryCheckRepository.findTopByOrderByCheckMonthDescCheckTimeDesc();
     }
 }

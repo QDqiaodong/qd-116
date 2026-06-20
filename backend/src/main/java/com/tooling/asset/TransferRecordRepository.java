@@ -7,4 +7,6 @@ import java.util.List;
 public interface TransferRecordRepository extends JpaRepository<TransferRecord, Long> {
 
     List<TransferRecord> findByToolingCodeOrderByTransferTimeDesc(String toolingCode);
+
+    long deleteByToolingCode(String toolingCode);
 }

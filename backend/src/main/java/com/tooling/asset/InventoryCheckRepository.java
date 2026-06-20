@@ -6,7 +6,7 @@ import java.util.Optional;
 
 public interface InventoryCheckRepository extends JpaRepository<InventoryCheck, Long> {
 
-    Optional<InventoryCheck> findByCheckMonth(String checkMonth);
+    Optional<InventoryCheck> findTopByCheckMonthOrderByCheckTimeDesc(String checkMonth);
 
-    Optional<InventoryCheck> findTopByOrderByCheckTimeDesc();
+    Optional<InventoryCheck> findTopByOrderByCheckMonthDescCheckTimeDesc();
 }

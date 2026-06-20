@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS transfer_record (
 
 CREATE TABLE IF NOT EXISTS inventory_check (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    check_month VARCHAR(7) NOT NULL,
+    check_month VARCHAR(7) NOT NULL UNIQUE,
     total_book INT,
     total_actual INT,
     difference INT,
