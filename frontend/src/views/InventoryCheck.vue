@@ -18,13 +18,26 @@
           <span class="info-label">差异</span>
           <span class="info-value">{{ latestCheck.difference > 0 ? '+' : '' }}{{ latestCheck.difference }}</span>
         </div>
+        <div class="info-card pending-card" @click="goToClosure" v-if="pendingCounts.total > 0">
+          <span class="info-label">待处理差异</span>
+          <span class="info-value pending-value">
+            {{ pendingCounts.total }}
+            <el-tag size="small" type="danger" class="mini-tag" v-if="pendingCounts.missing">缺{{ pendingCounts.missing }}</el-tag>
+            <el-tag size="small" type="warning" class="mini-tag" v-if="pendingCounts.misplaced">错{{ pendingCounts.misplaced }}</el-tag>
+          </span>
+        </div>
       </div>
       <div v-else class="latest-info">
         <div class="info-card">
           <span class="info-label">暂无清点记录</span>
         </div>
       </div>
-      <el-button type="success" :icon="Plus" @click="openDialog">新增清点</el-button>
+      <div class="toolbar-right">
+        <el-button type="primary" plain :icon="CircleCheck" @click="goToClosure" v-if="pendingCounts.total > 0">
+          处理差异 ({{ pendingCounts.total }})
+        </el-button>
+        <el-button type="success" :icon="Plus" @click="openDialog">新增清点</el-button>
+      </div>
     </div>
 
     <el-card class="region-panel" shadow="never">
@@ -35,6 +48,9 @@
             最近清点月份：{{ latestCheck.checkMonth }}（实盘/差异取自该月逐项盘点记录）
           </span>
           <span class="region-panel-sub" v-else>暂无清点记录，账面数取自工装台账，实盘默认等于账面</span>
+          <span class="region-panel-sub tip" v-if="latestCheck">
+            提示：点击每行操作按钮逐项标记「一致 / 缺失 / 错位」，标记缺失或错位后将自动生成待处理项
+          </span>
         </div>
       </template>
       <el-empty
@@ -64,24 +80,62 @@
                 <span class="rs rs-muted">
                   <i>已盘点</i><b>{{ g.checked }}/{{ g.book }}</b>
                 </span>
+                <span class="rs rs-pending" v-if="g.pending > 0">
+                  <i>待处理</i><b>{{ g.pending }}</b>
+                </span>
               </div>
             </div>
           </template>
           <el-table :data="g.assets" size="small" border>
             <el-table-column prop="toolingCode" label="工装编号" min-width="150" />
             <el-table-column prop="productName" label="适配产品" min-width="120" />
-            <el-table-column prop="workstation" label="存放工位" min-width="120" />
+            <el-table-column prop="workstation" label="登记工位" min-width="120" />
+            <el-table-column label="实际发现工位" min-width="140">
+              <template #default="{ row }">
+                <span v-if="row.diffType === 'MISPLACED' && row.actualFoundWorkstation" style="color: #e6a23c">{{ row.actualFoundWorkstation }}</span>
+                <span v-else style="color: #c0c4cc">-</span>
+              </template>
+            </el-table-column>
             <el-table-column label="状态" min-width="90">
               <template #default="{ row }">
                 <el-tag size="small" :type="assetStatusTagType(row.status)">{{ assetStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="盘点结果" min-width="100">
+            <el-table-column label="盘点结果" min-width="110">
               <template #default="{ row }">
-                <el-tag v-if="row.diffType === 'MISSING'" type="danger" size="small">盘亏</el-tag>
-                <el-tag v-else-if="row.diffType === 'EXTRA'" type="warning" size="small">盘盈</el-tag>
+                <el-tag v-if="row.diffType === 'MISSING'" type="danger" size="small">
+                  盘亏
+                  <el-tag v-if="row.handleStatus === 'PENDING'" type="danger" size="small" effect="plain" style="margin-left:4px">待处理</el-tag>
+                  <el-tag v-else-if="row.handleStatus === 'PROCESSED'" type="success" size="small" effect="plain" style="margin-left:4px">已闭环</el-tag>
+                </el-tag>
+                <el-tag v-else-if="row.diffType === 'MISPLACED'" type="warning" size="small">
+                  错位
+                  <el-tag v-if="row.handleStatus === 'PENDING'" type="warning" size="small" effect="plain" style="margin-left:4px">待处理</el-tag>
+                  <el-tag v-else-if="row.handleStatus === 'PROCESSED'" type="success" size="small" effect="plain" style="margin-left:4px">已闭环</el-tag>
+                </el-tag>
+                <el-tag v-else-if="row.diffType === 'EXTRA'" type="warning" size="small">
+                  盘盈
+                  <el-tag v-if="row.handleStatus === 'PENDING'" type="warning" size="small" effect="plain" style="margin-left:4px">待处理</el-tag>
+                </el-tag>
                 <el-tag v-else-if="row.diffType === 'MATCH'" type="success" size="small">一致</el-tag>
                 <span v-else class="not-checked">未盘点</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" min-width="320" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" type="success" plain @click="doMarkMatch(row)" v-if="canMark(row)">
+                  一致
+                </el-button>
+                <el-button size="small" type="danger" plain @click="doMarkMissing(row)" v-if="canMark(row)">
+                  缺失
+                </el-button>
+                <el-button size="small" type="warning" plain @click="openMisplacedDialog(row)" v-if="canMark(row)">
+                  错位
+                </el-button>
+                <el-button size="small" type="primary" link v-if="row.handleStatus === 'PENDING'" @click="goToClosure">
+                  处理
+                </el-button>
+                <span v-if="row.handleStatus === 'PROCESSED'" style="color: #67c23a; font-size: 12px">已闭环：{{ handleTypeLabel(row.handleType) }}</span>
               </template>
             </el-table-column>
           </el-table>
@@ -93,7 +147,10 @@
               type="warning"
               size="small"
               class="extra-tag"
-            >{{ d.toolingCode }}</el-tag>
+            >
+              {{ d.toolingCode }}
+              <el-tag v-if="d.handleStatus === 'PENDING'" size="small" type="warning" effect="plain" style="margin-left:4px">待处理</el-tag>
+            </el-tag>
           </div>
         </el-collapse-item>
       </el-collapse>
@@ -155,21 +212,56 @@
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="misplacedDialogVisible" :title="`标记错位 - ${misplacedRow?.toolingCode}`" width="480px" destroy-on-close>
+      <el-form ref="misplacedFormRef" :model="misplacedForm" :rules="misplacedRules" label-width="110px">
+        <el-form-item label="登记工位">
+          <el-input :model-value="misplacedRow?.workstation" disabled />
+        </el-form-item>
+        <el-form-item label="实际发现工位" prop="actualFoundWorkstation">
+          <el-input v-model="misplacedForm.actualFoundWorkstation" placeholder="请输入实际发现的工位" />
+        </el-form-item>
+        <el-form-item label="清点人" prop="checker">
+          <el-input v-model="misplacedForm.checker" placeholder="请输入清点人姓名" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="misplacedForm.remark" type="textarea" :rows="2" placeholder="请输入备注（可选）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="misplacedDialogVisible = false">取消</el-button>
+        <el-button type="warning" :loading="markLoading" @click="confirmMarkMisplaced">确认标记错位</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
-import { listChecks, createCheck, getLatestCheck, listAssets, listToolingDiffsByMonth } from '../api/tooling'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, CircleCheck } from '@element-plus/icons-vue'
+import {
+  listChecks,
+  createCheck,
+  getLatestCheck,
+  listAssets,
+  listToolingDiffsByMonth,
+  markMissing,
+  markMisplaced,
+  markMatch,
+  countPendingDiffs,
+} from '../api/tooling'
 
+const router = useRouter()
 const loading = ref(false)
 const tableData = ref([])
 const latestCheck = ref(null)
 const assets = ref([])
 const diffs = ref([])
+const pendingCounts = reactive({ total: 0, missing: 0, misplaced: 0, extra: 0 })
 const activeRegions = ref(['注塑机区', '模具库', '待检区', '其他'])
+const markLoading = ref(false)
 
 const REGION_ORDER = ['注塑机区', '模具库', '待检区', '其他']
 
@@ -191,6 +283,11 @@ const assetStatusTagType = (status) => {
   return map[status] || 'info'
 }
 
+const handleTypeLabel = (type) => {
+  const map = { RECOVERED: '确认找回', CORRECTED_WORKSTATION: '修正工位', SCRAPPED: '转报废', REGISTERED: '补录登记' }
+  return map[type] || type || '-'
+}
+
 const regionGroups = computed(() => {
   const activeAssets = assets.value.filter((a) => a.status !== 'SCRAPPED')
   const diffByCode = {}
@@ -200,7 +297,7 @@ const regionGroups = computed(() => {
   const groups = {}
   const ensure = (r) => {
     if (!groups[r]) {
-      groups[r] = { region: r, assets: [], book: 0, missing: 0, checked: 0, extraDiffs: [], actual: 0, diff: 0 }
+      groups[r] = { region: r, assets: [], book: 0, missing: 0, checked: 0, extraDiffs: [], actual: 0, diff: 0, pending: 0 }
     }
     return groups[r]
   }
@@ -208,17 +305,25 @@ const regionGroups = computed(() => {
   activeAssets.forEach((a) => {
     const g = ensure(regionOf(a.workstation))
     const d = diffByCode[a.toolingCode]
-    g.assets.push({ ...a, diffType: d ? d.diffType : null })
+    g.assets.push({
+      ...a,
+      diffType: d ? d.diffType : null,
+      handleStatus: d ? d.handleStatus : null,
+      handleType: d ? d.handleType : null,
+      actualFoundWorkstation: d ? d.actualFoundWorkstation : null,
+      diffId: d ? d.id : null,
+    })
     g.book++
     if (d) {
       g.checked++
-      if (d.bookExists === true && d.actualExists === false) g.missing++
+      if (d.diffType === 'MISSING') g.missing++
+      if (d.handleStatus === 'PENDING') g.pending++
     }
   })
   const activeCodes = new Set(activeAssets.map((a) => a.toolingCode))
   diffs.value.forEach((d) => {
     if (d.bookExists === false && d.actualExists === true && !activeCodes.has(d.toolingCode)) {
-      ensure(regionOf(d.workstation)).extraDiffs.push(d)
+      ensure(regionOf(d.workstation || d.actualFoundWorkstation)).extraDiffs.push(d)
     }
   })
   Object.values(groups).forEach((g) => {
@@ -229,6 +334,13 @@ const regionGroups = computed(() => {
     .map((r) => groups[r])
     .filter((g) => g.region !== '其他' || g.assets.length || g.extraDiffs.length)
 })
+
+const canMark = (row) => {
+  if (!latestCheck.value) return false
+  if (row.status === 'SCRAPPED') return false
+  if (row.handleStatus === 'PROCESSED') return false
+  return true
+}
 
 const fetchAssets = async () => {
   try {
@@ -249,6 +361,19 @@ const fetchDiffs = async () => {
     diffs.value = res.data || []
   } catch {
     diffs.value = []
+  }
+}
+
+const fetchPendingCounts = async () => {
+  try {
+    const res = await countPendingDiffs()
+    const data = res.data || {}
+    pendingCounts.total = Number(data.total) || 0
+    pendingCounts.missing = Number(data.missing) || 0
+    pendingCounts.misplaced = Number(data.misplaced) || 0
+    pendingCounts.extra = Number(data.extra) || 0
+  } catch {
+    /* ignore */
   }
 }
 
@@ -277,6 +402,105 @@ const diffClass = (diff) => {
   if (diff > 0) return 'diff-positive'
   if (diff < 0) return 'diff-negative'
   return 'diff-zero'
+}
+
+const goToClosure = () => {
+  router.push('/inventory-diff-closure')
+}
+
+const doMarkMatch = async (row) => {
+  if (!latestCheck.value) return
+  try {
+    await ElMessageBox.confirm(`确认将工装「${row.toolingCode}」标记为一致？`, '标记确认', { type: 'success' })
+  } catch {
+    return
+  }
+  try {
+    await markMatch({
+      checkMonth: latestCheck.value.checkMonth,
+      toolingCode: row.toolingCode,
+      checker: latestCheck.value.checker || 'admin',
+      remark: '清点确认一致',
+    })
+    ElMessage.success('已标记一致')
+    fetchDiffs()
+    fetchPendingCounts()
+  } catch (e) {
+    ElMessage.error('标记失败：' + (e?.message || ''))
+  }
+}
+
+const doMarkMissing = async (row) => {
+  if (!latestCheck.value) return
+  try {
+    await ElMessageBox.confirm(
+      `确认将工装「${row.toolingCode}」标记为缺失？\n标记后将生成待处理项，可在差异处理页面进行「找回 / 修正工位 / 转报废」操作。`,
+      '标记缺失确认',
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await markMissing({
+      checkMonth: latestCheck.value.checkMonth,
+      toolingCode: row.toolingCode,
+      checker: latestCheck.value.checker || 'admin',
+      remark: '清点标记缺失',
+    })
+    ElMessage.success('已标记缺失，已生成待处理项')
+    fetchDiffs()
+    fetchPendingCounts()
+  } catch (e) {
+    ElMessage.error('标记失败：' + (e?.message || ''))
+  }
+}
+
+const misplacedDialogVisible = ref(false)
+const misplacedFormRef = ref(null)
+const misplacedRow = ref(null)
+const misplacedForm = reactive({
+  actualFoundWorkstation: '',
+  checker: '',
+  remark: '',
+})
+const misplacedRules = {
+  actualFoundWorkstation: [{ required: true, message: '请输入实际发现工位', trigger: 'blur' }],
+  checker: [{ required: true, message: '请输入清点人', trigger: 'blur' }],
+}
+
+const openMisplacedDialog = (row) => {
+  if (!latestCheck.value) return
+  misplacedRow.value = row
+  Object.assign(misplacedForm, {
+    actualFoundWorkstation: '',
+    checker: latestCheck.value.checker || '',
+    remark: '',
+  })
+  misplacedDialogVisible.value = true
+}
+
+const confirmMarkMisplaced = async () => {
+  const valid = await misplacedFormRef.value.validate().catch(() => false)
+  if (!valid) return
+  markLoading.value = true
+  try {
+    await markMisplaced({
+      checkMonth: latestCheck.value.checkMonth,
+      toolingCode: misplacedRow.value.toolingCode,
+      actualFoundWorkstation: misplacedForm.actualFoundWorkstation,
+      checker: misplacedForm.checker,
+      remark: misplacedForm.remark || '清点标记错位',
+    })
+    ElMessage.success('已标记错位，已生成待处理项')
+    misplacedDialogVisible.value = false
+    fetchDiffs()
+    fetchPendingCounts()
+  } catch (e) {
+    ElMessage.error('标记失败：' + (e?.message || ''))
+  } finally {
+    markLoading.value = false
+  }
 }
 
 const dialogVisible = ref(false)
@@ -332,6 +556,7 @@ const handleSubmit = async () => {
     fetchAssets()
     await fetchLatest()
     fetchDiffs()
+    fetchPendingCounts()
   } catch {
     ElMessage.error('清点登记失败')
   } finally {
@@ -342,7 +567,10 @@ const handleSubmit = async () => {
 onMounted(() => {
   fetchList()
   fetchAssets()
-  fetchLatest().then(fetchDiffs)
+  fetchLatest().then(() => {
+    fetchDiffs()
+  })
+  fetchPendingCounts()
 })
 </script>
 
@@ -358,6 +586,11 @@ onMounted(() => {
   margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  gap: 8px;
 }
 
 .latest-info {
@@ -387,6 +620,31 @@ onMounted(() => {
   font-size: 20px;
   font-weight: 700;
   color: #303133;
+}
+
+.pending-card {
+  cursor: pointer;
+  border: 1px solid #fef0f0;
+  background: linear-gradient(135deg, #fff 0%, #fef0f0 100%);
+  transition: all 0.2s;
+}
+
+.pending-card:hover {
+  box-shadow: 0 2px 12px rgba(245, 108, 108, 0.25);
+  transform: translateY(-1px);
+}
+
+.pending-value {
+  color: #f56c6c;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mini-tag {
+  font-size: 10px;
+  height: 16px;
+  line-height: 14px;
 }
 
 .diff-positive .info-value {
@@ -436,6 +694,10 @@ onMounted(() => {
 .region-panel-sub {
   font-size: 12px;
   color: #909399;
+}
+
+.region-panel-sub.tip {
+  color: #e6a23c;
 }
 
 .region-panel :deep(.el-collapse-item__header) {
@@ -502,6 +764,11 @@ onMounted(() => {
 .rs-muted b {
   color: #909399;
   font-weight: 600;
+}
+
+.rs-pending b {
+  color: #f56c6c;
+  font-weight: 700;
 }
 
 .not-checked {

@@ -38,6 +38,12 @@ const routes = [
         meta: { title: '实物清点' },
       },
       {
+        path: 'inventory-diff-closure',
+        name: 'InventoryDiffClosure',
+        component: () => import('../views/InventoryDiffClosure.vue'),
+        meta: { title: '差异闭环处理' },
+      },
+      {
         path: 'scrap',
         name: 'Scrap',
         component: () => import('../views/ScrapRecord.vue'),

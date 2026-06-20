@@ -41,4 +41,20 @@ public class ToolingInventoryDiff {
     private String workstation;
 
     private String remark;
+
+    private String handleStatus;
+
+    private String handleType;
+
+    private LocalDateTime handleTime;
+
+    private String handler;
+
+    private String handleRemark;
+
+    private String expectedWorkstation;
+
+    private String actualFoundWorkstation;
+
+    private String correctedWorkstation;
 }

@@ -39,6 +39,10 @@
             <el-icon><Checked /></el-icon>
             <span>实物清点</span>
           </el-menu-item>
+          <el-menu-item index="/inventory-diff-closure">
+            <el-icon><Operation /></el-icon>
+            <span>差异闭环</span>
+          </el-menu-item>
           <el-menu-item index="/scrap">
             <el-icon><Delete /></el-icon>
             <span>报废归档</span>
@@ -59,7 +63,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Box, Switch, Checked, Delete, SetUp, Clock, Grid, Position } from '@element-plus/icons-vue'
+import { Box, Switch, Checked, Delete, SetUp, Clock, Grid, Position, Operation } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activeMenu = computed(() => route.path)

@@ -100,6 +100,42 @@ export function recordToolingDiff(params) {
   return request.post('/inventory/diff', null, { params })
 }
 
+export function markMissing(params) {
+  return request.post('/inventory/diff/mark-missing', null, { params })
+}
+
+export function markMisplaced(params) {
+  return request.post('/inventory/diff/mark-misplaced', null, { params })
+}
+
+export function markMatch(params) {
+  return request.post('/inventory/diff/mark-match', null, { params })
+}
+
+export function markExtra(params) {
+  return request.post('/inventory/diff/mark-extra', null, { params })
+}
+
+export function handleRecover(diffId, params) {
+  return request.post(`/inventory/diff/handle-recover/${diffId}`, null, { params })
+}
+
+export function handleCorrectWorkstation(diffId, params) {
+  return request.post(`/inventory/diff/handle-correct-workstation/${diffId}`, null, { params })
+}
+
+export function handleScrap(diffId, params) {
+  return request.post(`/inventory/diff/handle-scrap/${diffId}`, null, { params })
+}
+
+export function listPendingDiffs(diffType) {
+  return request.get('/inventory/diff/pending/list', { params: { diffType } })
+}
+
+export function countPendingDiffs() {
+  return request.get('/inventory/diff/pending/count')
+}
+
 export function listToolingDiffs(toolingCode) {
   return request.get(`/inventory/diff/${toolingCode}`)
 }

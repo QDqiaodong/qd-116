@@ -55,8 +55,18 @@ CREATE TABLE IF NOT EXISTS tooling_inventory_diff (
     check_time DATETIME,
     workstation VARCHAR(50),
     remark VARCHAR(500),
+    handle_status VARCHAR(20),
+    handle_type VARCHAR(40),
+    handle_time DATETIME,
+    handler VARCHAR(50),
+    handle_remark VARCHAR(500),
+    expected_workstation VARCHAR(50),
+    actual_found_workstation VARCHAR(50),
+    corrected_workstation VARCHAR(50),
     INDEX idx_tooling_code (tooling_code),
-    INDEX idx_check_month (check_month)
+    INDEX idx_check_month (check_month),
+    INDEX idx_handle_status (handle_status),
+    INDEX idx_diff_type (diff_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO tooling_asset (tooling_code, product_name, workstation, entry_date, status, remark) VALUES
