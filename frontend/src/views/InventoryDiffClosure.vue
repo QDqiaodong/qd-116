@@ -359,8 +359,8 @@ const fetchPendingList = async () => {
   try {
     const res = await listPendingDiffs(activeFilter.value || undefined)
     tableData.value = res.data || []
-  } catch {
-    ElMessage.error('获取待处理差异失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '获取待处理差异失败')
   } finally {
     loading.value = false
   }
@@ -379,8 +379,8 @@ const fetchProcessedList = async () => {
     } else {
       tableData.value = []
     }
-  } catch {
-    ElMessage.error('获取已闭环记录失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '获取已闭环记录失败')
   } finally {
     loading.value = false
   }

@@ -44,10 +44,11 @@
         <el-card class="asset-card" shadow="hover">
           <div class="card-img-wrapper">
             <img
-              v-if="item.imageUrl"
+              v-if="item.imageUrl && !isImageBroken(item)"
               :src="'/api/file/' + item.imageUrl"
               class="card-img"
               alt=""
+              @error="handleImageError(item)"
             />
             <div v-else class="card-img-placeholder">
               <el-icon :size="40"><Picture /></el-icon>
@@ -159,6 +160,8 @@
             list-type="picture-card"
             accept="image/*"
             :limit="1"
+            :before-upload="beforeImageUpload"
+            :on-exceed="handleImageExceed"
           >
             <el-icon :size="24"><Plus /></el-icon>
           </el-upload>
@@ -264,7 +267,7 @@ import {
   getSpecTemplate,
   listSpecCategories,
 } from '../api/tooling'
-import { batchCompressImages } from '../utils/compress'
+import { batchCompressImages, validateImageFile } from '../utils/compress'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -303,6 +306,15 @@ const keyword = ref('')
 const filterStatus = ref('')
 const filterWorkstation = ref('')
 const stats = reactive({ inUse: 0, transferred: 0, scrapped: 0 })
+const brokenImageIds = reactive(new Set())
+
+const handleImageError = (item) => {
+  brokenImageIds.add(item.id)
+}
+
+const isImageBroken = (item) => {
+  return brokenImageIds.has(item.id)
+}
 
 const fetchList = async () => {
   loading.value = true
@@ -313,8 +325,9 @@ const fetchList = async () => {
     if (filterWorkstation.value) params.workstation = filterWorkstation.value
     const res = await listAssets(params)
     list.value = res.data || []
-  } catch {
-    ElMessage.error('获取列表失败')
+    brokenImageIds.clear()
+  } catch (e) {
+    ElMessage.error(e?.message || '获取列表失败')
   } finally {
     loading.value = false
   }
@@ -464,8 +477,8 @@ const generateNextCode = async () => {
       form.toolingCode = res.data
       await validateCode(res.data)
     }
-  } catch {
-    ElMessage.error('生成编号失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '生成编号失败')
   }
 }
 
@@ -514,10 +527,29 @@ const handleCodeBlur = () => {
   }
 }
 
+const beforeImageUpload = (file) => {
+  const validation = validateImageFile(file)
+  if (!validation.valid) {
+    ElMessage.error(validation.message)
+    return false
+  }
+  return true
+}
+
+const handleImageExceed = () => {
+  ElMessage.warning('最多只能上传 1 张图片')
+}
+
 const prepareImage = async () => {
   const newFiles = fileList.value.filter((f) => f.raw && f.status !== 'success')
   if (newFiles.length) {
     const rawFiles = newFiles.map((f) => f.raw)
+    for (const f of rawFiles) {
+      const validation = validateImageFile(f)
+      if (!validation.valid) {
+        throw new Error(validation.message)
+      }
+    }
     const compressed = await batchCompressImages(rawFiles)
     const uploadResult = await uploadFile(compressed[0])
     form.imageUrl = uploadResult.data
@@ -618,7 +650,7 @@ const handleSubmit = async () => {
     fetchStats()
   } catch (err) {
     if (err && err.message === 'cancelled') return
-    ElMessage.error(isEdit.value ? '更新失败' : '创建失败')
+    ElMessage.error(err?.message || (isEdit.value ? '更新失败' : '创建失败'))
   } finally {
     submitting.value = false
   }
@@ -682,7 +714,7 @@ const submitTransfer = async () => {
     fetchList()
     fetchStats()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.message || '移位失败')
+    ElMessage.error(e?.message || '移位失败')
   } finally {
     submitting.value = false
   }
@@ -755,8 +787,8 @@ const submitScrap = async () => {
     scrapVisible.value = false
     fetchList()
     fetchStats()
-  } catch {
-    ElMessage.error('报废失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '报废失败')
   } finally {
     submitting.value = false
   }

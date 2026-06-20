@@ -6,15 +6,27 @@ const request = axios.create({
   timeout: 30000,
 })
 
+const extractErrorMessage = (error) => {
+  if (error?.response?.data?.message) {
+    return error.response.data.message
+  }
+  if (error?.message) {
+    return error.message
+  }
+  return '网络异常'
+}
+
 request.interceptors.response.use(
   (response) => {
     const res = response.data
     if (res.code !== 200) {
-      if (response.status === 409) {
+      if (res.code === 409 || response.status === 409) {
         return res
       }
-      ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
+      const msg = res.message || '请求失败'
+      const err = new Error(msg)
+      err.response = { data: res }
+      return Promise.reject(err)
     }
     return res
   },
@@ -22,8 +34,12 @@ request.interceptors.response.use(
     if (error.response && error.response.status === 409) {
       return error.response.data
     }
-    ElMessage.error(error.message || '网络异常')
-    return Promise.reject(error)
+    const msg = extractErrorMessage(error)
+    const err = new Error(msg)
+    if (error.response) {
+      err.response = error.response
+    }
+    return Promise.reject(err)
   }
 )
 

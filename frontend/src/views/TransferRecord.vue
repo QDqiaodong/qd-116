@@ -162,8 +162,8 @@ const fetchList = async () => {
   try {
     const res = await listTransfers()
     tableData.value = res.data || []
-  } catch {
-    ElMessage.error('获取移位记录失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '获取移位记录失败')
   } finally {
     loading.value = false
   }
@@ -224,7 +224,7 @@ const submitTransfer = async () => {
     transferDialogVisible.value = false
     fetchList()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.message || '移位登记失败')
+    ElMessage.error(e?.message || '移位登记失败')
   } finally {
     submitting.value = false
   }
@@ -251,7 +251,7 @@ const viewHistory = async (toolingCode) => {
     historyData.value = transferRes.data || []
     stayData.value = staysRes.data || []
   } catch (e) {
-    ElMessage.error(e?.response?.data?.message || '获取移位历史失败')
+    ElMessage.error(e?.message || '获取移位历史失败')
   } finally {
     historyLoading.value = false
   }

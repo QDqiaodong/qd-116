@@ -200,8 +200,8 @@ const fetchList = async () => {
   try {
     const res = await listScraps()
     tableData.value = res.data || []
-  } catch {
-    ElMessage.error('获取报废记录失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '获取报废记录失败')
   } finally {
     loading.value = false
   }
@@ -279,8 +279,8 @@ const submitScrap = async () => {
     ElMessage.success('报废登记成功')
     scrapDialogVisible.value = false
     fetchList()
-  } catch {
-    ElMessage.error('报废登记失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '报废登记失败')
   } finally {
     submitting.value = false
   }
@@ -296,8 +296,8 @@ const viewHistory = async (toolingCode) => {
   try {
     const res = await getScrapHistory(toolingCode)
     historyData.value = res.data || []
-  } catch {
-    ElMessage.error('获取报废历史失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '获取报废历史失败')
   } finally {
     historyLoading.value = false
   }

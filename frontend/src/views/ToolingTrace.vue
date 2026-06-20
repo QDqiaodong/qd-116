@@ -142,7 +142,7 @@ const handleSearch = async () => {
     router.replace({ query: { code } })
   } catch (e) {
     trace.value = null
-    ElMessage.error(e?.response?.data?.message || '未找到该工装的履历信息')
+    ElMessage.error(e?.message || '未找到该工装的履历信息')
   } finally {
     loading.value = false
   }

@@ -382,8 +382,8 @@ const fetchList = async () => {
   try {
     const res = await listChecks()
     tableData.value = res.data || []
-  } catch {
-    ElMessage.error('获取清点记录失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '获取清点记录失败')
   } finally {
     loading.value = false
   }
@@ -557,8 +557,8 @@ const handleSubmit = async () => {
     await fetchLatest()
     fetchDiffs()
     fetchPendingCounts()
-  } catch {
-    ElMessage.error('清点登记失败')
+  } catch (e) {
+    ElMessage.error(e?.message || '清点登记失败')
   } finally {
     submitting.value = false
   }
