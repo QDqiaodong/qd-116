@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -98,7 +99,7 @@ public class FileController {
             return Result.fail("文件名不能为空");
         }
 
-        String lowerName = originalFilename.toLowerCase();
+        String lowerName = originalFilename.toLowerCase(Locale.ROOT);
         boolean hasValidExt = false;
         String extension = "";
         for (String ext : ALLOWED_EXTENSIONS) {
@@ -114,7 +115,7 @@ public class FileController {
 
         String contentType = file.getContentType();
         if (contentType != null && !contentType.isEmpty()) {
-            String lowerCt = contentType.toLowerCase();
+            String lowerCt = contentType.toLowerCase(Locale.ROOT);
             if (!ALLOWED_IMAGE_TYPES.contains(lowerCt)) {
                 return Result.fail("不支持的文件类型，仅允许上传图片文件");
             }
@@ -147,18 +148,21 @@ public class FileController {
             return Result.fail("读取图片内容失败");
         }
 
-        Path dir = Paths.get(uploadDir);
+        Path dir = Paths.get(uploadDir).normalize().toAbsolutePath();
         if (!Files.exists(dir)) {
             Files.createDirectories(dir);
         }
         String filename = UUID.randomUUID().toString() + extension;
-        Path filePath = dir.resolve(filename);
+        Path filePath = dir.resolve(filename).normalize();
+        if (!filePath.startsWith(dir)) {
+            return Result.fail("文件名不合法");
+        }
         file.transferTo(filePath.toFile());
         return Result.ok(filename);
     }
 
     private MediaType getMediaTypeForFilename(String filename) {
-        String lower = filename.toLowerCase();
+        String lower = filename.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
             return MediaType.IMAGE_JPEG;
         } else if (lower.endsWith(".png")) {
@@ -175,15 +179,37 @@ public class FileController {
 
     @GetMapping("/{filename}")
     public ResponseEntity<Resource> getFile(@PathVariable String filename) throws MalformedURLException {
-        Path filePath = Paths.get(uploadDir).resolve(filename);
+        if (filename == null || filename.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String lowerName = filename.toLowerCase(Locale.ROOT);
+        boolean hasValidExt = false;
+        for (String ext : ALLOWED_EXTENSIONS) {
+            if (lowerName.endsWith(ext)) {
+                hasValidExt = true;
+                break;
+            }
+        }
+        if (!hasValidExt) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        Path dir = Paths.get(uploadDir).normalize().toAbsolutePath();
+        Path filePath = dir.resolve(filename).normalize();
+
+        if (!filePath.startsWith(dir)) {
+            return ResponseEntity.badRequest().build();
+        }
+
         Resource resource = new UrlResource(filePath.toUri());
         if (!resource.exists() || !resource.isReadable()) {
             return ResponseEntity.notFound().build();
         }
+
         MediaType mediaType = getMediaTypeForFilename(filename);
         return ResponseEntity.ok()
                 .contentType(mediaType)
                 .body(resource);
     }
 }
-

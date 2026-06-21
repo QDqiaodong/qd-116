@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+import java.util.List;
 import java.util.Set;
 
 @RestController
@@ -20,13 +20,13 @@ public class SpecTemplateController {
     private final SpecTemplateCacheService specTemplateCacheService;
 
     @PostMapping("/{category}")
-    public Result<Void> saveTemplate(@PathVariable String category, @RequestBody Map<String, String> specMap) {
-        specTemplateCacheService.saveTemplate(category, specMap);
+    public Result<Void> saveTemplate(@PathVariable String category, @RequestBody List<SpecField> fields) {
+        specTemplateCacheService.saveTemplate(category, fields);
         return Result.ok();
     }
 
     @GetMapping("/{category}")
-    public Result<Map<Object, Object>> getTemplate(@PathVariable String category) {
+    public Result<List<SpecField>> getTemplate(@PathVariable String category) {
         return Result.ok(specTemplateCacheService.getTemplate(category));
     }
 

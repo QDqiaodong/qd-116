@@ -389,6 +389,21 @@ const listWithSpec = computed(() =>
   list.value.map((item) => ({ ...item, spec: buildSpec(item) }))
 )
 
+const fieldsToMap = (fields) => {
+  if (!fields || !Array.isArray(fields)) return {}
+  const map = {}
+  fields.forEach((f) => {
+    if (f && f.fieldName) {
+      const val = f.defaultValue || f.label || ''
+      map[f.fieldName] = val
+      if (f.label && f.label !== f.fieldName) {
+        map[f.label] = val
+      }
+    }
+  })
+  return map
+}
+
 const fetchSpecTemplates = async () => {
   try {
     const catRes = await listSpecCategories()
@@ -397,7 +412,7 @@ const fetchSpecTemplates = async () => {
     await Promise.all(
       cats.map(async (cat) => {
         const t = await getSpecTemplate(cat)
-        map[cat] = t.data || {}
+        map[cat] = fieldsToMap(t.data)
       })
     )
     specMapByCategory.value = map
