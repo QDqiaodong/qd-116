@@ -1,29 +1,37 @@
 <template>
   <div class="inventory-check">
     <div class="toolbar">
-      <div class="latest-info" v-if="latestCheck">
+      <div class="latest-info" v-if="summaryStats">
         <div class="info-card">
           <span class="info-label">最近清点月份</span>
-          <span class="info-value">{{ latestCheck.checkMonth }}</span>
+          <span class="info-value">{{ latestCheck?.checkMonth || '-' }}</span>
         </div>
         <div class="info-card">
-          <span class="info-label">账面数量</span>
-          <span class="info-value">{{ latestCheck.totalBook }}</span>
+          <span class="info-label">账面总数</span>
+          <span class="info-value stat-book">{{ summaryStats.totalBook }}</span>
         </div>
         <div class="info-card">
-          <span class="info-label">实物数量</span>
-          <span class="info-value">{{ latestCheck.totalActual }}</span>
+          <span class="info-label">实际确认数</span>
+          <span class="info-value stat-actual">{{ summaryStats.totalActualConfirmed }}</span>
         </div>
-        <div class="info-card" :class="{ 'diff-positive': latestCheck.difference > 0, 'diff-negative': latestCheck.difference < 0 }">
-          <span class="info-label">差异</span>
-          <span class="info-value">{{ latestCheck.difference > 0 ? '+' : '' }}{{ latestCheck.difference }}</span>
+        <div class="info-card">
+          <span class="info-label">缺失数</span>
+          <span class="info-value stat-missing">{{ summaryStats.totalMissing }}</span>
         </div>
-        <div class="info-card pending-card" @click="goToClosure" v-if="pendingCounts.total > 0">
+        <div class="info-card">
+          <span class="info-label">错位数</span>
+          <span class="info-value stat-misplaced">{{ summaryStats.totalMisplaced }}</span>
+        </div>
+        <div class="info-card">
+          <span class="info-label">已报废排除</span>
+          <span class="info-value stat-scrapped">{{ summaryStats.totalScrappedExcluded }}</span>
+        </div>
+        <div class="info-card pending-card" @click="goToClosure" v-if="summaryStats.totalPending > 0">
           <span class="info-label">待处理差异</span>
           <span class="info-value pending-value">
-            {{ pendingCounts.total }}
-            <el-tag size="small" type="danger" class="mini-tag" v-if="pendingCounts.missing">缺{{ pendingCounts.missing }}</el-tag>
-            <el-tag size="small" type="warning" class="mini-tag" v-if="pendingCounts.misplaced">错{{ pendingCounts.misplaced }}</el-tag>
+            {{ summaryStats.totalPending }}
+            <el-tag size="small" type="danger" class="mini-tag" v-if="summaryStats.totalMissing">缺{{ summaryStats.totalMissing }}</el-tag>
+            <el-tag size="small" type="warning" class="mini-tag" v-if="summaryStats.totalMisplaced">错{{ summaryStats.totalMisplaced }}</el-tag>
           </span>
         </div>
       </div>
@@ -33,8 +41,8 @@
         </div>
       </div>
       <div class="toolbar-right">
-        <el-button type="primary" plain :icon="CircleCheck" @click="goToClosure" v-if="pendingCounts.total > 0">
-          处理差异 ({{ pendingCounts.total }})
+        <el-button type="primary" plain :icon="CircleCheck" @click="goToClosure" v-if="summaryStats && summaryStats.totalPending > 0">
+          处理差异 ({{ summaryStats.totalPending }})
         </el-button>
         <el-button type="success" :icon="Plus" @click="openDialog">新增清点</el-button>
       </div>
@@ -69,19 +77,28 @@
               <span class="region-name">{{ g.region }}</span>
               <div class="region-stats">
                 <span class="rs">
-                  <i>账面</i><b>{{ g.book }}</b>
+                  <i>账面</i><b>{{ regionStatMap[g.region]?.bookCount ?? g.book }}</b>
                 </span>
                 <span class="rs">
-                  <i>实盘</i><b>{{ g.actual }}</b>
+                  <i>实确</i><b>{{ regionStatMap[g.region]?.actualConfirmedCount ?? g.actual }}</b>
                 </span>
-                <span class="rs" :class="diffClass(g.diff)">
-                  <i>差异</i><b>{{ g.diff > 0 ? '+' : '' }}{{ g.diff }}</b>
+                <span class="rs rs-missing" v-if="(regionStatMap[g.region]?.missingCount ?? g.missing) > 0">
+                  <i>缺失</i><b>{{ regionStatMap[g.region]?.missingCount ?? g.missing }}</b>
+                </span>
+                <span class="rs rs-misplaced" v-if="(regionStatMap[g.region]?.misplacedCount ?? 0) > 0">
+                  <i>错位</i><b>{{ regionStatMap[g.region]?.misplacedCount ?? 0 }}</b>
+                </span>
+                <span class="rs rs-scrapped" v-if="(regionStatMap[g.region]?.scrappedExcludedCount ?? 0) > 0">
+                  <i>报废排除</i><b>{{ regionStatMap[g.region]?.scrappedExcludedCount ?? 0 }}</b>
+                </span>
+                <span class="rs rs-extra" v-if="(regionStatMap[g.region]?.extraCount ?? g.extraDiffs.length) > 0">
+                  <i>盘盈</i><b>{{ regionStatMap[g.region]?.extraCount ?? g.extraDiffs.length }}</b>
                 </span>
                 <span class="rs rs-muted">
-                  <i>已盘点</i><b>{{ g.checked }}/{{ g.book }}</b>
+                  <i>已盘点</i><b>{{ regionStatMap[g.region]?.checkedCount ?? g.checked }}/{{ regionStatMap[g.region]?.bookCount ?? g.book }}</b>
                 </span>
-                <span class="rs rs-pending" v-if="g.pending > 0">
-                  <i>待处理</i><b>{{ g.pending }}</b>
+                <span class="rs rs-pending" v-if="(regionStatMap[g.region]?.pendingCount ?? g.pending) > 0">
+                  <i>待处理</i><b>{{ regionStatMap[g.region]?.pendingCount ?? g.pending }}</b>
                 </span>
               </div>
             </div>
@@ -159,8 +176,11 @@
     <div class="section-title">清点记录</div>
     <el-table :data="tableData" v-loading="loading" border stripe style="width: 100%">
       <el-table-column prop="checkMonth" label="清点月份" min-width="120" />
-      <el-table-column prop="totalBook" label="账面数量" min-width="100" />
-      <el-table-column prop="totalActual" label="实物数量" min-width="100" />
+      <el-table-column prop="totalBook" label="账面总数" min-width="100" />
+      <el-table-column prop="totalActual" label="实物总数" min-width="100" />
+      <el-table-column prop="missingCount" label="缺失数" min-width="90" />
+      <el-table-column prop="misplacedCount" label="错位数" min-width="90" />
+      <el-table-column prop="scrappedExcludedCount" label="已报废排除" min-width="110" />
       <el-table-column label="差异" min-width="120">
         <template #default="{ row }">
           <span :class="diffClass(row.difference)">{{ row.difference > 0 ? '+' : '' }}{{ row.difference }}</span>
@@ -181,7 +201,7 @@
     <el-empty v-if="!tableData.length && !loading" description="暂无清点记录" />
 
     <el-dialog v-model="dialogVisible" title="清点登记" width="520px" destroy-on-close>
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
         <el-form-item label="清点月份" prop="checkMonth">
           <el-date-picker
             v-model="form.checkMonth"
@@ -191,11 +211,20 @@
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item label="账面数量" prop="bookCount">
+        <el-form-item label="账面总数" prop="bookCount">
           <el-input-number v-model="form.bookCount" :min="0" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="实物数量" prop="actualCount">
+        <el-form-item label="实物总数" prop="actualCount">
           <el-input-number v-model="form.actualCount" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="缺失数">
+          <el-input-number v-model="form.missingCount" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="错位数">
+          <el-input-number v-model="form.misplacedCount" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="已报废排除数">
+          <el-input-number v-model="form.scrappedExcludedCount" :min="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="差异">
           <el-input :model-value="differenceDisplay" disabled />
@@ -251,6 +280,7 @@ import {
   markMisplaced,
   markMatch,
   countPendingDiffs,
+  getInventorySummaryStats,
 } from '../api/tooling'
 
 const router = useRouter()
@@ -259,6 +289,7 @@ const tableData = ref([])
 const latestCheck = ref(null)
 const assets = ref([])
 const diffs = ref([])
+const summaryStats = ref(null)
 const pendingCounts = reactive({ total: 0, missing: 0, misplaced: 0, extra: 0 })
 const activeRegions = ref(['注塑机区', '模具库', '待检区', '其他'])
 const markLoading = ref(false)
@@ -288,6 +319,16 @@ const handleTypeLabel = (type) => {
   return map[type] || type || '-'
 }
 
+const regionStatMap = computed(() => {
+  const map = {}
+  if (summaryStats.value && summaryStats.value.regions) {
+    summaryStats.value.regions.forEach((r) => {
+      map[r.region] = r
+    })
+  }
+  return map
+})
+
 const regionGroups = computed(() => {
   const activeAssets = assets.value.filter((a) => a.status !== 'SCRAPPED')
   const diffByCode = {}
@@ -297,7 +338,7 @@ const regionGroups = computed(() => {
   const groups = {}
   const ensure = (r) => {
     if (!groups[r]) {
-      groups[r] = { region: r, assets: [], book: 0, missing: 0, checked: 0, extraDiffs: [], actual: 0, diff: 0, pending: 0 }
+      groups[r] = { region: r, assets: [], book: 0, missing: 0, misplaced: 0, checked: 0, extraDiffs: [], actual: 0, diff: 0, pending: 0 }
     }
     return groups[r]
   }
@@ -317,6 +358,7 @@ const regionGroups = computed(() => {
     if (d) {
       g.checked++
       if (d.diffType === 'MISSING') g.missing++
+      if (d.diffType === 'MISPLACED') g.misplaced++
       if (d.handleStatus === 'PENDING') g.pending++
     }
   })
@@ -377,6 +419,16 @@ const fetchPendingCounts = async () => {
   }
 }
 
+const fetchSummaryStats = async () => {
+  try {
+    const month = latestCheck.value?.checkMonth || null
+    const res = await getInventorySummaryStats(month)
+    summaryStats.value = res.data || null
+  } catch {
+    summaryStats.value = null
+  }
+}
+
 const fetchList = async () => {
   loading.value = true
   try {
@@ -425,6 +477,7 @@ const doMarkMatch = async (row) => {
     ElMessage.success('已标记一致')
     fetchDiffs()
     fetchPendingCounts()
+    fetchSummaryStats()
   } catch (e) {
     ElMessage.error('标记失败：' + (e?.message || ''))
   }
@@ -451,6 +504,7 @@ const doMarkMissing = async (row) => {
     ElMessage.success('已标记缺失，已生成待处理项')
     fetchDiffs()
     fetchPendingCounts()
+    fetchSummaryStats()
   } catch (e) {
     ElMessage.error('标记失败：' + (e?.message || ''))
   }
@@ -496,6 +550,7 @@ const confirmMarkMisplaced = async () => {
     misplacedDialogVisible.value = false
     fetchDiffs()
     fetchPendingCounts()
+    fetchSummaryStats()
   } catch (e) {
     ElMessage.error('标记失败：' + (e?.message || ''))
   } finally {
@@ -511,14 +566,17 @@ const form = reactive({
   checkMonth: '',
   bookCount: 0,
   actualCount: 0,
+  missingCount: 0,
+  misplacedCount: 0,
+  scrappedExcludedCount: 0,
   checker: '',
   remark: '',
 })
 
 const rules = {
   checkMonth: [{ required: true, message: '请选择清点月份', trigger: 'change' }],
-  bookCount: [{ required: true, message: '请输入账面数量', trigger: 'blur' }],
-  actualCount: [{ required: true, message: '请输入实物数量', trigger: 'blur' }],
+  bookCount: [{ required: true, message: '请输入账面总数', trigger: 'blur' }],
+  actualCount: [{ required: true, message: '请输入实物总数', trigger: 'blur' }],
   checker: [{ required: true, message: '请输入清点人', trigger: 'blur' }],
 }
 
@@ -532,6 +590,9 @@ const openDialog = () => {
     checkMonth: '',
     bookCount: 0,
     actualCount: 0,
+    missingCount: 0,
+    misplacedCount: 0,
+    scrappedExcludedCount: 0,
     checker: '',
     remark: '',
   })
@@ -547,6 +608,9 @@ const handleSubmit = async () => {
       checkMonth: form.checkMonth,
       totalBook: form.bookCount,
       totalActual: form.actualCount,
+      missingCount: form.missingCount,
+      misplacedCount: form.misplacedCount,
+      scrappedExcludedCount: form.scrappedExcludedCount,
       checker: form.checker,
       remark: form.remark,
     })
@@ -557,6 +621,7 @@ const handleSubmit = async () => {
     await fetchLatest()
     fetchDiffs()
     fetchPendingCounts()
+    fetchSummaryStats()
   } catch (e) {
     ElMessage.error(e?.message || '清点登记失败')
   } finally {
@@ -569,6 +634,7 @@ onMounted(() => {
   fetchAssets()
   fetchLatest().then(() => {
     fetchDiffs()
+    fetchSummaryStats()
   })
   fetchPendingCounts()
 })
@@ -666,6 +732,44 @@ onMounted(() => {
 }
 
 .diff-zero {
+  color: #909399;
+  font-weight: 600;
+}
+
+.stat-book {
+  color: #409eff;
+}
+
+.stat-actual {
+  color: #67c23a;
+}
+
+.stat-missing {
+  color: #f56c6c;
+}
+
+.stat-misplaced {
+  color: #e6a23c;
+}
+
+.stat-scrapped {
+  color: #909399;
+}
+
+.rs-missing b {
+  color: #f56c6c;
+}
+
+.rs-misplaced b {
+  color: #e6a23c;
+}
+
+.rs-scrapped b {
+  color: #909399;
+  font-weight: 600;
+}
+
+.rs-extra b {
   color: #909399;
   font-weight: 600;
 }

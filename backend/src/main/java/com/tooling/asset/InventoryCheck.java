@@ -30,6 +30,12 @@ public class InventoryCheck {
 
     private Integer totalActual;
 
+    private Integer missingCount;
+
+    private Integer misplacedCount;
+
+    private Integer scrappedExcludedCount;
+
     private Integer difference;
 
     private String checker;

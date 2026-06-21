@@ -34,7 +34,9 @@ public class InventoryService {
     private final TransferRecordRepository transferRecordRepository;
     private final ScrapRecordRepository scrapRecordRepository;
 
-    public InventoryCheck check(String checkMonth, Integer totalBook, Integer totalActual, String checker, String remark) {
+    public InventoryCheck check(String checkMonth, Integer totalBook, Integer totalActual,
+                                Integer missingCount, Integer misplacedCount, Integer scrappedExcludedCount,
+                                String checker, String remark) {
         Integer difference = totalActual - totalBook;
         InventoryCheck inventoryCheck = inventoryCheckRepository
                 .findTopByCheckMonthOrderByCheckTimeDesc(checkMonth)
@@ -42,6 +44,9 @@ public class InventoryService {
         inventoryCheck.setCheckMonth(checkMonth);
         inventoryCheck.setTotalBook(totalBook);
         inventoryCheck.setTotalActual(totalActual);
+        inventoryCheck.setMissingCount(missingCount);
+        inventoryCheck.setMisplacedCount(misplacedCount);
+        inventoryCheck.setScrappedExcludedCount(scrappedExcludedCount);
         inventoryCheck.setDifference(difference);
         inventoryCheck.setChecker(checker);
         inventoryCheck.setCheckTime(LocalDateTime.now());
@@ -326,5 +331,118 @@ public class InventoryService {
     @Transactional(readOnly = true)
     public Optional<InventoryCheck> getLatestCheck() {
         return inventoryCheckRepository.findTopByOrderByCheckMonthDescCheckTimeDesc();
+    }
+
+    private String regionOf(String workstation) {
+        if (workstation == null || workstation.isEmpty()) return "其他";
+        if (workstation.startsWith("注塑机")) return "注塑机区";
+        if (workstation.startsWith("模具库")) return "模具库";
+        if (workstation.equals("待检区") || workstation.startsWith("待检")) return "待检区";
+        return "其他";
+    }
+
+    @Transactional(readOnly = true)
+    public InventorySummaryStats getSummaryStats(String checkMonth) {
+        List<ToolingAsset> allAssets = toolingAssetRepository.findAll();
+        List<ToolingInventoryDiff> monthDiffs = checkMonth != null && !checkMonth.isEmpty()
+                ? toolingInventoryDiffRepository.findByCheckMonth(checkMonth)
+                : List.of();
+
+        java.util.Map<String, ToolingInventoryDiff> diffByCode = new java.util.HashMap<>();
+        for (ToolingInventoryDiff d : monthDiffs) {
+            diffByCode.put(d.getToolingCode(), d);
+        }
+
+        java.util.Map<String, InventoryRegionStats> regionMap = new java.util.LinkedHashMap<>();
+        java.util.List<String> REGION_ORDER = List.of("注塑机区", "模具库", "待检区", "其他");
+        for (String r : REGION_ORDER) {
+            regionMap.put(r, InventoryRegionStats.builder()
+                    .region(r)
+                    .bookCount(0)
+                    .actualConfirmedCount(0)
+                    .missingCount(0)
+                    .misplacedCount(0)
+                    .scrappedExcludedCount(0)
+                    .extraCount(0)
+                    .checkedCount(0)
+                    .pendingCount(0)
+                    .build());
+        }
+
+        java.util.Set<String> activeCodes = new java.util.HashSet<>();
+        for (ToolingAsset a : allAssets) {
+            String region = regionOf(a.getWorkstation());
+            InventoryRegionStats stats = regionMap.computeIfAbsent(region, r -> InventoryRegionStats.builder()
+                    .region(r).bookCount(0).actualConfirmedCount(0).missingCount(0)
+                    .misplacedCount(0).scrappedExcludedCount(0).extraCount(0).checkedCount(0).pendingCount(0).build());
+
+            if (ToolingStatus.SCRAPPED.equals(a.getStatus())) {
+                stats.setScrappedExcludedCount(stats.getScrappedExcludedCount() + 1);
+            } else {
+                activeCodes.add(a.getToolingCode());
+                stats.setBookCount(stats.getBookCount() + 1);
+                ToolingInventoryDiff d = diffByCode.get(a.getToolingCode());
+                if (d != null) {
+                    stats.setCheckedCount(stats.getCheckedCount() + 1);
+                    if (DIFF_TYPE_MISSING.equals(d.getDiffType())) {
+                        stats.setMissingCount(stats.getMissingCount() + 1);
+                    } else if (DIFF_TYPE_MISPLACED.equals(d.getDiffType())) {
+                        stats.setMisplacedCount(stats.getMisplacedCount() + 1);
+                    }
+                    if (HANDLE_STATUS_PENDING.equals(d.getHandleStatus())) {
+                        stats.setPendingCount(stats.getPendingCount() + 1);
+                    }
+                }
+            }
+        }
+
+        for (ToolingInventoryDiff d : monthDiffs) {
+            if (Boolean.FALSE.equals(d.getBookExists()) && Boolean.TRUE.equals(d.getActualExists())
+                    && !activeCodes.contains(d.getToolingCode())) {
+                String region = regionOf(d.getWorkstation() != null ? d.getWorkstation() : d.getActualFoundWorkstation());
+                InventoryRegionStats stats = regionMap.computeIfAbsent(region, r -> InventoryRegionStats.builder()
+                        .region(r).bookCount(0).actualConfirmedCount(0).missingCount(0)
+                        .misplacedCount(0).scrappedExcludedCount(0).extraCount(0).checkedCount(0).pendingCount(0).build());
+                stats.setExtraCount(stats.getExtraCount() + 1);
+                if (HANDLE_STATUS_PENDING.equals(d.getHandleStatus())) {
+                    stats.setPendingCount(stats.getPendingCount() + 1);
+                }
+            }
+        }
+
+        for (InventoryRegionStats s : regionMap.values()) {
+            int confirmed = s.getBookCount() - s.getMissingCount() - s.getMisplacedCount();
+            s.setActualConfirmedCount(Math.max(confirmed, 0));
+        }
+
+        int sumBook = 0, sumActual = 0, sumMissing = 0, sumMisplaced = 0, sumScrapped = 0, sumExtra = 0, sumChecked = 0, sumPending = 0;
+        java.util.List<InventoryRegionStats> regionList = new java.util.ArrayList<>();
+        for (String r : REGION_ORDER) {
+            InventoryRegionStats s = regionMap.get(r);
+            if (s != null && (s.getBookCount() > 0 || s.getScrappedExcludedCount() > 0 || s.getExtraCount() > 0)) {
+                regionList.add(s);
+                sumBook += s.getBookCount();
+                sumActual += s.getActualConfirmedCount();
+                sumMissing += s.getMissingCount();
+                sumMisplaced += s.getMisplacedCount();
+                sumScrapped += s.getScrappedExcludedCount();
+                sumExtra += s.getExtraCount();
+                sumChecked += s.getCheckedCount();
+                sumPending += s.getPendingCount();
+            }
+        }
+
+        return InventorySummaryStats.builder()
+                .checkMonth(checkMonth)
+                .totalBook(sumBook)
+                .totalActualConfirmed(sumActual)
+                .totalMissing(sumMissing)
+                .totalMisplaced(sumMisplaced)
+                .totalScrappedExcluded(sumScrapped)
+                .totalExtra(sumExtra)
+                .totalChecked(sumChecked)
+                .totalPending(sumPending)
+                .regions(regionList)
+                .build();
     }
 }

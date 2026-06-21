@@ -26,9 +26,13 @@ public class InventoryController {
             @RequestParam String checkMonth,
             @RequestParam Integer totalBook,
             @RequestParam Integer totalActual,
+            @RequestParam(required = false) Integer missingCount,
+            @RequestParam(required = false) Integer misplacedCount,
+            @RequestParam(required = false) Integer scrappedExcludedCount,
             @RequestParam String checker,
             @RequestParam(required = false) String remark) {
-        return Result.ok(inventoryService.check(checkMonth, totalBook, totalActual, checker, remark));
+        return Result.ok(inventoryService.check(checkMonth, totalBook, totalActual,
+                missingCount, misplacedCount, scrappedExcludedCount, checker, remark));
     }
 
     @PostMapping("/diff")
@@ -141,5 +145,10 @@ public class InventoryController {
     @GetMapping("/latest")
     public Result<InventoryCheck> latest() {
         return Result.ok(inventoryService.getLatestCheck().orElse(null));
+    }
+
+    @GetMapping("/stats/summary")
+    public Result<InventorySummaryStats> summaryStats(@RequestParam(required = false) String checkMonth) {
+        return Result.ok(inventoryService.getSummaryStats(checkMonth));
     }
 }

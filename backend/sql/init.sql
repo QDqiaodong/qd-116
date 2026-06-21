@@ -26,13 +26,17 @@ CREATE TABLE IF NOT EXISTS transfer_record (
 
 CREATE TABLE IF NOT EXISTS inventory_check (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    check_month VARCHAR(7) NOT NULL UNIQUE,
+    check_month VARCHAR(7) NOT NULL,
     total_book INT,
     total_actual INT,
+    missing_count INT,
+    misplaced_count INT,
+    scrapped_excluded_count INT,
     difference INT,
     checker VARCHAR(50),
     check_time DATETIME,
-    remark VARCHAR(500)
+    remark VARCHAR(500),
+    INDEX idx_check_month (check_month)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS scrap_record (
