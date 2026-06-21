@@ -33,6 +33,7 @@ public class InventoryService {
     private final ToolingAssetRepository toolingAssetRepository;
     private final TransferRecordRepository transferRecordRepository;
     private final ScrapRecordRepository scrapRecordRepository;
+    private final InventoryBatchSnapshotRepository inventoryBatchSnapshotRepository;
 
     public InventoryCheck check(String checkMonth, Integer totalBook, Integer totalActual,
                                 Integer missingCount, Integer misplacedCount, Integer scrappedExcludedCount,
@@ -67,11 +68,8 @@ public class InventoryService {
         } else {
             diffType = DIFF_TYPE_UNKNOWN;
         }
-        String workstation = null;
         Optional<ToolingAsset> assetOpt = toolingAssetRepository.findByToolingCode(toolingCode);
-        if (assetOpt.isPresent()) {
-            workstation = assetOpt.get().getWorkstation();
-        }
+        String workstation = getBookWorkstation(checkMonth, toolingCode, assetOpt.orElse(null));
         String handleStatus = null;
         if (DIFF_TYPE_MATCH.equals(diffType)) {
             handleStatus = HANDLE_STATUS_PROCESSED;
@@ -97,6 +95,7 @@ public class InventoryService {
     public ToolingInventoryDiff markMissing(String checkMonth, String toolingCode, String checker, String remark) {
         ToolingAsset asset = toolingAssetRepository.findByToolingCode(toolingCode)
                 .orElseThrow(() -> new RuntimeException("工装不存在，无法标记缺失: " + toolingCode));
+        String bookWorkstation = getBookWorkstation(checkMonth, toolingCode, asset);
         ToolingInventoryDiff diff = toolingInventoryDiffRepository
                 .findByCheckMonthAndToolingCode(checkMonth, toolingCode)
                 .orElseGet(ToolingInventoryDiff::new);
@@ -107,8 +106,8 @@ public class InventoryService {
         diff.setDiffType(DIFF_TYPE_MISSING);
         diff.setChecker(checker);
         diff.setCheckTime(LocalDateTime.now());
-        diff.setWorkstation(asset.getWorkstation());
-        diff.setExpectedWorkstation(asset.getWorkstation());
+        diff.setWorkstation(bookWorkstation);
+        diff.setExpectedWorkstation(bookWorkstation);
         diff.setRemark(remark);
         diff.setHandleStatus(HANDLE_STATUS_PENDING);
         return toolingInventoryDiffRepository.save(diff);
@@ -121,6 +120,7 @@ public class InventoryService {
         if (actualFoundWorkstation == null || actualFoundWorkstation.trim().isEmpty()) {
             throw new RuntimeException("标记错位必须填写实际发现工位");
         }
+        String bookWorkstation = getBookWorkstation(checkMonth, toolingCode, asset);
         ToolingInventoryDiff diff = toolingInventoryDiffRepository
                 .findByCheckMonthAndToolingCode(checkMonth, toolingCode)
                 .orElseGet(ToolingInventoryDiff::new);
@@ -131,8 +131,8 @@ public class InventoryService {
         diff.setDiffType(DIFF_TYPE_MISPLACED);
         diff.setChecker(checker);
         diff.setCheckTime(LocalDateTime.now());
-        diff.setWorkstation(asset.getWorkstation());
-        diff.setExpectedWorkstation(asset.getWorkstation());
+        diff.setWorkstation(bookWorkstation);
+        diff.setExpectedWorkstation(bookWorkstation);
         diff.setActualFoundWorkstation(actualFoundWorkstation);
         diff.setRemark(remark);
         diff.setHandleStatus(HANDLE_STATUS_PENDING);
@@ -142,6 +142,7 @@ public class InventoryService {
     public ToolingInventoryDiff markMatch(String checkMonth, String toolingCode, String checker, String remark) {
         ToolingAsset asset = toolingAssetRepository.findByToolingCode(toolingCode)
                 .orElseThrow(() -> new RuntimeException("工装不存在，无法标记一致: " + toolingCode));
+        String bookWorkstation = getBookWorkstation(checkMonth, toolingCode, asset);
         ToolingInventoryDiff diff = toolingInventoryDiffRepository
                 .findByCheckMonthAndToolingCode(checkMonth, toolingCode)
                 .orElseGet(ToolingInventoryDiff::new);
@@ -152,8 +153,8 @@ public class InventoryService {
         diff.setDiffType(DIFF_TYPE_MATCH);
         diff.setChecker(checker);
         diff.setCheckTime(LocalDateTime.now());
-        diff.setWorkstation(asset.getWorkstation());
-        diff.setExpectedWorkstation(asset.getWorkstation());
+        diff.setWorkstation(bookWorkstation);
+        diff.setExpectedWorkstation(bookWorkstation);
         diff.setRemark(remark);
         diff.setHandleStatus(HANDLE_STATUS_PROCESSED);
         diff.setHandleTime(LocalDateTime.now());
@@ -333,6 +334,19 @@ public class InventoryService {
         return inventoryCheckRepository.findTopByOrderByCheckMonthDescCheckTimeDesc();
     }
 
+    private String getBookWorkstation(String checkMonth, String toolingCode, ToolingAsset asset) {
+        if (checkMonth != null && !checkMonth.isEmpty()) {
+            List<InventoryBatchSnapshot> snapshots = inventoryBatchSnapshotRepository
+                    .findByBatchMonth(checkMonth);
+            for (InventoryBatchSnapshot snapshot : snapshots) {
+                if (toolingCode.equals(snapshot.getToolingCode())) {
+                    return snapshot.getBookWorkstation();
+                }
+            }
+        }
+        return asset != null ? asset.getWorkstation() : null;
+    }
+
     private String regionOf(String workstation) {
         if (workstation == null || workstation.isEmpty()) return "其他";
         if (workstation.startsWith("注塑机")) return "注塑机区";
@@ -344,6 +358,7 @@ public class InventoryService {
     @Transactional(readOnly = true)
     public InventorySummaryStats getSummaryStats(String checkMonth) {
         List<ToolingAsset> allAssets = toolingAssetRepository.findAll();
+
         List<ToolingInventoryDiff> monthDiffs = checkMonth != null && !checkMonth.isEmpty()
                 ? toolingInventoryDiffRepository.findByCheckMonth(checkMonth)
                 : List.of();
@@ -369,28 +384,61 @@ public class InventoryService {
                     .build());
         }
 
-        java.util.Set<String> activeCodes = new java.util.HashSet<>();
-        for (ToolingAsset a : allAssets) {
-            String region = regionOf(a.getWorkstation());
-            InventoryRegionStats stats = regionMap.computeIfAbsent(region, r -> InventoryRegionStats.builder()
-                    .region(r).bookCount(0).actualConfirmedCount(0).missingCount(0)
-                    .misplacedCount(0).scrappedExcludedCount(0).extraCount(0).checkedCount(0).pendingCount(0).build());
+        List<InventoryBatchSnapshot> batchSnapshots = (checkMonth != null && !checkMonth.isEmpty())
+                ? inventoryBatchSnapshotRepository.findByBatchMonth(checkMonth)
+                : null;
 
-            if (ToolingStatus.SCRAPPED.equals(a.getStatus())) {
-                stats.setScrappedExcludedCount(stats.getScrappedExcludedCount() + 1);
-            } else {
-                activeCodes.add(a.getToolingCode());
-                stats.setBookCount(stats.getBookCount() + 1);
-                ToolingInventoryDiff d = diffByCode.get(a.getToolingCode());
-                if (d != null) {
-                    stats.setCheckedCount(stats.getCheckedCount() + 1);
-                    if (DIFF_TYPE_MISSING.equals(d.getDiffType())) {
-                        stats.setMissingCount(stats.getMissingCount() + 1);
-                    } else if (DIFF_TYPE_MISPLACED.equals(d.getDiffType())) {
-                        stats.setMisplacedCount(stats.getMisplacedCount() + 1);
+        java.util.Set<String> activeCodes = new java.util.HashSet<>();
+
+        if (batchSnapshots != null && !batchSnapshots.isEmpty()) {
+            for (InventoryBatchSnapshot snapshot : batchSnapshots) {
+                String region = regionOf(snapshot.getBookWorkstation());
+                InventoryRegionStats stats = regionMap.computeIfAbsent(region, r -> InventoryRegionStats.builder()
+                        .region(r).bookCount(0).actualConfirmedCount(0).missingCount(0)
+                        .misplacedCount(0).scrappedExcludedCount(0).extraCount(0).checkedCount(0).pendingCount(0).build());
+
+                if (ToolingStatus.SCRAPPED.equals(snapshot.getBookStatus())) {
+                    stats.setScrappedExcludedCount(stats.getScrappedExcludedCount() + 1);
+                } else {
+                    activeCodes.add(snapshot.getToolingCode());
+                    stats.setBookCount(stats.getBookCount() + 1);
+                    ToolingInventoryDiff d = diffByCode.get(snapshot.getToolingCode());
+                    if (d != null) {
+                        stats.setCheckedCount(stats.getCheckedCount() + 1);
+                        if (DIFF_TYPE_MISSING.equals(d.getDiffType())) {
+                            stats.setMissingCount(stats.getMissingCount() + 1);
+                        } else if (DIFF_TYPE_MISPLACED.equals(d.getDiffType())) {
+                            stats.setMisplacedCount(stats.getMisplacedCount() + 1);
+                        }
+                        if (HANDLE_STATUS_PENDING.equals(d.getHandleStatus())) {
+                            stats.setPendingCount(stats.getPendingCount() + 1);
+                        }
                     }
-                    if (HANDLE_STATUS_PENDING.equals(d.getHandleStatus())) {
-                        stats.setPendingCount(stats.getPendingCount() + 1);
+                }
+            }
+        } else {
+            for (ToolingAsset a : allAssets) {
+                String region = regionOf(a.getWorkstation());
+                InventoryRegionStats stats = regionMap.computeIfAbsent(region, r -> InventoryRegionStats.builder()
+                        .region(r).bookCount(0).actualConfirmedCount(0).missingCount(0)
+                        .misplacedCount(0).scrappedExcludedCount(0).extraCount(0).checkedCount(0).pendingCount(0).build());
+
+                if (ToolingStatus.SCRAPPED.equals(a.getStatus())) {
+                    stats.setScrappedExcludedCount(stats.getScrappedExcludedCount() + 1);
+                } else {
+                    activeCodes.add(a.getToolingCode());
+                    stats.setBookCount(stats.getBookCount() + 1);
+                    ToolingInventoryDiff d = diffByCode.get(a.getToolingCode());
+                    if (d != null) {
+                        stats.setCheckedCount(stats.getCheckedCount() + 1);
+                        if (DIFF_TYPE_MISSING.equals(d.getDiffType())) {
+                            stats.setMissingCount(stats.getMissingCount() + 1);
+                        } else if (DIFF_TYPE_MISPLACED.equals(d.getDiffType())) {
+                            stats.setMisplacedCount(stats.getMisplacedCount() + 1);
+                        }
+                        if (HANDLE_STATUS_PENDING.equals(d.getHandleStatus())) {
+                            stats.setPendingCount(stats.getPendingCount() + 1);
+                        }
                     }
                 }
             }
