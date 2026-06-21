@@ -35,4 +35,6 @@ public class TransferRecord {
     private String operator;
 
     private String remark;
+
+    private Long approvalId;
 }

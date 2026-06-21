@@ -20,8 +20,40 @@ public class TransferService {
     private final TransferRecordRepository transferRecordRepository;
     private final ToolingAssetRepository toolingAssetRepository;
     private final WorkstationCapacityService workstationCapacityService;
+    private final WorkstationCapacityRepository workstationCapacityRepository;
+
+    private static final String REGION_INJECTION = "注塑机区";
+    private static final String REGION_REPAIR = "维修区";
+    private static final String REGION_MOLD = "模具库";
+
+    private String getRegionOfWorkstation(String workstation) {
+        if (workstation == null || workstation.isEmpty()) {
+            return "其他";
+        }
+        java.util.Optional<WorkstationCapacity> capacity = workstationCapacityRepository.findByWorkstation(workstation);
+        if (capacity.isPresent() && capacity.get().getRegion() != null && !capacity.get().getRegion().isEmpty()) {
+            return capacity.get().getRegion();
+        }
+        if (workstation.startsWith("注塑机")) return REGION_INJECTION;
+        if (workstation.startsWith("模具库")) return REGION_MOLD;
+        if (workstation.contains("维修")) return REGION_REPAIR;
+        if (workstation.equals("待检区") || workstation.startsWith("待检")) return "待检区";
+        return "其他";
+    }
+
+    public boolean isHighRiskTransfer(String fromWorkstation, String toWorkstation) {
+        String fromRegion = getRegionOfWorkstation(fromWorkstation);
+        String toRegion = getRegionOfWorkstation(toWorkstation);
+        return REGION_INJECTION.equals(fromRegion)
+                && (REGION_REPAIR.equals(toRegion) || REGION_MOLD.equals(toRegion));
+    }
 
     public TransferRecord transfer(String toolingCode, String fromWorkstation, String toWorkstation, String operator, String remark) {
+        return transferWithApproval(toolingCode, fromWorkstation, toWorkstation, operator, remark, null);
+    }
+
+    public TransferRecord transferWithApproval(String toolingCode, String fromWorkstation, String toWorkstation,
+                                               String operator, String remark, Long approvalId) {
         if (operator == null || operator.trim().isEmpty()) {
             throw new BusinessException("操作人不能为空");
         }
@@ -39,6 +71,10 @@ public class TransferService {
             throw new BusinessException("目标工位与当前工位相同，无需移位");
         }
 
+        if (isHighRiskTransfer(actualFromWorkstation, toWorkstation) && approvalId == null) {
+            throw new BusinessException("该移位属于高风险移位（从注塑机区到维修区/模具库），需先走审批流程，请通过高风险移位审批接口提交申请");
+        }
+
         workstationCapacityService.validateCapacityForTransfer(toWorkstation);
 
         asset.setWorkstation(toWorkstation);
@@ -53,6 +89,7 @@ public class TransferService {
                 .transferTime(LocalDateTime.now())
                 .operator(operator)
                 .remark(remark)
+                .approvalId(approvalId)
                 .build();
         return transferRecordRepository.save(record);
     }

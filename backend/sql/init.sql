@@ -21,7 +21,10 @@ CREATE TABLE IF NOT EXISTS transfer_record (
     to_workstation VARCHAR(50),
     transfer_time DATETIME,
     operator VARCHAR(50),
-    remark VARCHAR(500)
+    remark VARCHAR(500),
+    approval_id BIGINT,
+    INDEX idx_tooling_code (tooling_code),
+    INDEX idx_approval_id (approval_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS inventory_check (
@@ -161,3 +164,33 @@ INSERT INTO scrap_reason (reason_code, reason_name, category, enabled, sort_orde
 ('LB_DIMENSION', '尺寸偏差', 'LOCATING_BLOCK', 1, 3, '定位块加工或安装尺寸偏差超出允许范围'),
 ('LB_UNLOCATABLE', '无法定位', 'LOCATING_BLOCK', 1, 4, '定位块无法正常完成定位功能，定位精度不达标'),
 ('LB_REPAIR_FAIL', '维修失败', 'LOCATING_BLOCK', 1, 5, '定位块经维修后仍无法满足使用要求');
+
+INSERT INTO workstation_capacity (workstation, region, max_capacity, remark) VALUES
+('维修区A台', '维修区', 10, '维修区A工作台，上限10件'),
+('维修区B台', '维修区', 10, '维修区B工作台，上限10件'),
+('维修区C台', '维修区', 10, '维修区C工作台，上限10件'),
+('待维修暂存区', '维修区', 30, '待维修工装暂存区，上限30件');
+
+CREATE TABLE IF NOT EXISTS high_risk_transfer_approval (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tooling_code VARCHAR(50) NOT NULL,
+    from_workstation VARCHAR(50),
+    from_region VARCHAR(20),
+    to_workstation VARCHAR(50),
+    to_region VARCHAR(20),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    applicant VARCHAR(50),
+    apply_time DATETIME,
+    apply_reason VARCHAR(500),
+    approver VARCHAR(50),
+    approve_time DATETIME,
+    approve_remark VARCHAR(500),
+    executor VARCHAR(50),
+    execute_time DATETIME,
+    transfer_record_id BIGINT,
+    remark VARCHAR(500),
+    INDEX idx_tooling_code (tooling_code),
+    INDEX idx_status (status),
+    INDEX idx_apply_time (apply_time),
+    INDEX idx_transfer_record_id (transfer_record_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
