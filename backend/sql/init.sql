@@ -140,3 +140,24 @@ CREATE TABLE IF NOT EXISTS inventory_batch_snapshot (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Redis规格模板数据请通过API初始化：POST /api/spec-template/{category}
+
+CREATE TABLE IF NOT EXISTS scrap_reason (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    reason_code VARCHAR(50) UNIQUE NOT NULL,
+    reason_name VARCHAR(100) NOT NULL,
+    category VARCHAR(50) DEFAULT 'GENERAL',
+    enabled TINYINT(1) DEFAULT 1,
+    sort_order INT DEFAULT 0,
+    remark VARCHAR(500),
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_category (category),
+    INDEX idx_enabled (enabled)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO scrap_reason (reason_code, reason_name, category, enabled, sort_order, remark) VALUES
+('LB_WEAR', '磨损', 'LOCATING_BLOCK', 1, 1, '定位块长期使用造成磨损，尺寸超出公差'),
+('LB_FRACTURE', '断裂', 'LOCATING_BLOCK', 1, 2, '定位块发生断裂、裂纹或破损'),
+('LB_DIMENSION', '尺寸偏差', 'LOCATING_BLOCK', 1, 3, '定位块加工或安装尺寸偏差超出允许范围'),
+('LB_UNLOCATABLE', '无法定位', 'LOCATING_BLOCK', 1, 4, '定位块无法正常完成定位功能，定位精度不达标'),
+('LB_REPAIR_FAIL', '维修失败', 'LOCATING_BLOCK', 1, 5, '定位块经维修后仍无法满足使用要求');
