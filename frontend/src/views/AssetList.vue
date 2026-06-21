@@ -236,7 +236,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Search,
@@ -271,6 +271,7 @@ import { batchCompressImages, validateImageFile } from '../utils/compress'
 import dayjs from 'dayjs'
 
 const router = useRouter()
+const route = useRoute()
 
 const workstationOptions = [
   '注塑机01', '注塑机02', '注塑机03', '注塑机04',
@@ -429,7 +430,7 @@ const rules = {
   entryDate: [{ required: true, message: '请选择入库日期', trigger: 'change' }],
 }
 
-const openDialog = (item) => {
+const openDialog = (item, precheckImageUrl, precheckFileName) => {
   isEdit.value = !!item
   resetCodeValidation()
   if (item) {
@@ -452,12 +453,16 @@ const openDialog = (item) => {
       toolingCode: '',
       productName: '',
       workstation: '',
-      entryDate: '',
+      entryDate: dayjs().format('YYYY-MM-DD'),
       status: 'IN_USE',
       imageUrl: '',
       remark: '',
     })
-    fileList.value = []
+    if (precheckImageUrl) {
+      fileList.value = [{ name: precheckFileName || 'precheck-image', url: precheckImageUrl, status: 'success' }]
+    } else {
+      fileList.value = []
+    }
   }
   dialogVisible.value = true
 }
@@ -540,6 +545,12 @@ const handleImageExceed = () => {
   ElMessage.warning('最多只能上传 1 张图片')
 }
 
+const urlToFile = async (url, fileName) => {
+  const response = await fetch(url)
+  const blob = await response.blob()
+  return new File([blob], fileName || 'image.jpg', { type: blob.type })
+}
+
 const prepareImage = async () => {
   const newFiles = fileList.value.filter((f) => f.raw && f.status !== 'success')
   if (newFiles.length) {
@@ -556,7 +567,18 @@ const prepareImage = async () => {
   } else {
     const existingFile = fileList.value.find((f) => f.status === 'success' && f.url)
     if (existingFile && existingFile.url) {
-      form.imageUrl = existingFile.url.replace('/api/file/', '')
+      if (existingFile.url.startsWith('blob:')) {
+        const fileFromBlob = await urlToFile(existingFile.url, existingFile.name || 'precheck-image.jpg')
+        const validation = validateImageFile(fileFromBlob)
+        if (!validation.valid) {
+          throw new Error(validation.message)
+        }
+        const compressed = await batchCompressImages([fileFromBlob])
+        const uploadResult = await uploadFile(compressed[0])
+        form.imageUrl = uploadResult.data
+      } else {
+        form.imageUrl = existingFile.url.replace('/api/file/', '')
+      }
     }
   }
 }
@@ -794,10 +816,17 @@ const submitScrap = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   fetchList()
   fetchStats()
   fetchSpecTemplates()
+  const precheckImage = route.query.precheckImage
+  const precheckFileName = route.query.precheckFileName
+  if (precheckImage) {
+    await generateNextCode()
+    openDialog(null, precheckImage, precheckFileName)
+    router.replace({ query: {} })
+  }
 })
 </script>
 

@@ -61,6 +61,12 @@ const routes = [
         component: () => import('../views/ToolingTrace.vue'),
         meta: { title: '轨迹履历' },
       },
+      {
+        path: 'image-precheck',
+        name: 'ImagePrecheck',
+        component: () => import('../views/ImagePrecheck.vue'),
+        meta: { title: '图片预检' },
+      },
     ],
   },
 ]

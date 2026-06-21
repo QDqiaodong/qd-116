@@ -43,6 +43,10 @@
             <el-icon><DocumentChecked /></el-icon>
             <span>清点工作台</span>
           </el-menu-item>
+          <el-menu-item index="/image-precheck">
+            <el-icon><Picture /></el-icon>
+            <span>图片预检</span>
+          </el-menu-item>
           <el-menu-item index="/inventory-diff-closure">
             <el-icon><Operation /></el-icon>
             <span>差异闭环</span>
@@ -67,7 +71,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Box, Switch, Checked, Delete, SetUp, Clock, Grid, Position, Operation, DocumentChecked } from '@element-plus/icons-vue'
+import { Box, Switch, Checked, Delete, SetUp, Clock, Grid, Position, Operation, DocumentChecked, Picture } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activeMenu = computed(() => route.path)
