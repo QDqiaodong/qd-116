@@ -610,16 +610,38 @@ const buildDuplicateHtml = (data) => {
 const doCreateAsset = async (forceCreate = false) => {
   const res = await createAsset({ ...form }, forceCreate)
   if (res.code === 409) {
+    const similarAssets = res.data?.similarAssets || []
     try {
       await ElMessageBox({
         title: '疑似重复提醒',
         dangerouslyUseHTMLString: true,
-        message: buildDuplicateHtml({ similarAssets: [] }) + '<div style="margin-top:10px;">' + (res.message || '存在疑似重复记录') + '</div>',
+        message: buildDuplicateHtml({ similarAssets }),
         confirmButtonText: '确认继续录入',
         cancelButtonText: '取消',
         type: 'warning',
       })
       return await doCreateAsset(true)
+    } catch {
+      throw new Error('cancelled')
+    }
+  }
+  return res
+}
+
+const doUpdateAsset = async (forceUpdate = false) => {
+  const res = await updateAsset(editId.value, { ...form }, forceUpdate)
+  if (res.code === 409) {
+    const similarAssets = res.data?.similarAssets || []
+    try {
+      await ElMessageBox({
+        title: '疑似重复提醒',
+        dangerouslyUseHTMLString: true,
+        message: buildDuplicateHtml({ similarAssets }),
+        confirmButtonText: '确认继续保存',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+      return await doUpdateAsset(true)
     } catch {
       throw new Error('cancelled')
     }
@@ -634,39 +656,43 @@ const handleSubmit = async () => {
   try {
     await prepareImage()
 
-    if (isEdit.value) {
-      await updateAsset(editId.value, { ...form })
-      ElMessage.success('更新成功')
-    } else {
-      const checkRes = await checkDuplicateAsset({ ...form })
-      const checkData = checkRes.data || {}
+    const checkDataParam = isEdit.value ? { ...form, id: editId.value } : { ...form }
+    const checkRes = await checkDuplicateAsset(checkDataParam)
+    const checkData = checkRes.data || {}
 
-      if (checkData.codeDuplicate) {
-        ElMessage.error('工装编号已存在，请更换编号')
+    if (checkData.codeDuplicate) {
+      ElMessage.error('工装编号已存在，请更换编号')
+      submitting.value = false
+      return
+    }
+
+    if (checkData.duplicate && checkData.similarAssets && checkData.similarAssets.length > 0) {
+      try {
+        await ElMessageBox({
+          title: '疑似重复提醒',
+          dangerouslyUseHTMLString: true,
+          message: buildDuplicateHtml(checkData),
+          confirmButtonText: isEdit.value ? '确认继续保存' : '确认继续录入',
+          cancelButtonText: '取消',
+          type: 'warning',
+        })
+      } catch {
         submitting.value = false
         return
       }
-
-      if (checkData.duplicate && checkData.similarAssets && checkData.similarAssets.length > 0) {
-        try {
-          await ElMessageBox({
-            title: '疑似重复提醒',
-            dangerouslyUseHTMLString: true,
-            message: buildDuplicateHtml(checkData),
-            confirmButtonText: '确认继续录入',
-            cancelButtonText: '取消',
-            type: 'warning',
-          })
-        } catch {
-          submitting.value = false
-          return
-        }
+      if (isEdit.value) {
+        await doUpdateAsset(true)
+      } else {
         await doCreateAsset(true)
+      }
+    } else {
+      if (isEdit.value) {
+        await doUpdateAsset(false)
       } else {
         await doCreateAsset(false)
       }
-      ElMessage.success('创建成功')
     }
+    ElMessage.success(isEdit.value ? '更新成功' : '创建成功')
     dialogVisible.value = false
     fetchList()
     fetchStats()

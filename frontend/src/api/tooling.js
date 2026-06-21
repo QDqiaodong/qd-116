@@ -16,8 +16,8 @@ export function checkDuplicateAsset(data) {
   return request.post('/tooling/check-duplicate', data)
 }
 
-export function updateAsset(id, data) {
-  return request.put(`/tooling/${id}`, data)
+export function updateAsset(id, data, forceUpdate = false) {
+  return request.put(`/tooling/${id}`, data, { params: { forceUpdate } })
 }
 
 export function deleteAsset(id) {

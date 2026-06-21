@@ -29,7 +29,7 @@ public class ToolingAssetController {
     }
 
     @PostMapping
-    public ResponseEntity<Result<ToolingAsset>> create(
+    public ResponseEntity<Result<?>> create(
             @RequestBody ToolingAsset asset,
             @RequestParam(defaultValue = "false") boolean forceCreate) {
         try {
@@ -42,14 +42,29 @@ public class ToolingAssetController {
                     .similarAssets(e.getSimilarAssets())
                     .message(e.getMessage())
                     .build();
-            Result<ToolingAsset> result = new Result<>(409, e.getMessage(), null);
+            Result<DuplicateCheckResult> result = new Result<>(409, e.getMessage(), warning);
             return ResponseEntity.status(HttpStatus.CONFLICT).body(result);
         }
     }
 
     @PutMapping("/{id}")
-    public Result<ToolingAsset> update(@PathVariable Long id, @RequestBody ToolingAsset asset) {
-        return Result.ok(toolingAssetService.updateAsset(id, asset));
+    public ResponseEntity<Result<?>> update(
+            @PathVariable Long id,
+            @RequestBody ToolingAsset asset,
+            @RequestParam(defaultValue = "false") boolean forceUpdate) {
+        try {
+            ToolingAsset updated = toolingAssetService.updateAsset(id, asset, forceUpdate);
+            return ResponseEntity.ok(Result.ok(updated));
+        } catch (DuplicateWarningException e) {
+            DuplicateCheckResult warning = DuplicateCheckResult.builder()
+                    .duplicate(true)
+                    .codeDuplicate(false)
+                    .similarAssets(e.getSimilarAssets())
+                    .message(e.getMessage())
+                    .build();
+            Result<DuplicateCheckResult> result = new Result<>(409, e.getMessage(), warning);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(result);
+        }
     }
 
     @DeleteMapping("/{id}")

@@ -27,7 +27,14 @@ public class ToolingAssetService {
     private final ScrapRecordRepository scrapRecordRepository;
 
     public DuplicateCheckResult checkDuplicate(ToolingAsset asset) {
-        boolean codeDuplicate = toolingAssetRepository.findByToolingCode(asset.getToolingCode()).isPresent();
+        boolean codeDuplicate = false;
+        if (asset.getId() != null) {
+            codeDuplicate = toolingAssetRepository.findByToolingCode(asset.getToolingCode())
+                    .filter(a -> !a.getId().equals(asset.getId()))
+                    .isPresent();
+        } else {
+            codeDuplicate = toolingAssetRepository.findByToolingCode(asset.getToolingCode()).isPresent();
+        }
 
         List<ToolingAsset> similarAssets = new ArrayList<>();
         if (asset.getProductName() != null && asset.getWorkstation() != null && asset.getEntryDate() != null) {
@@ -48,7 +55,7 @@ public class ToolingAssetService {
         }
 
         boolean hasDuplicate = codeDuplicate || !similarAssets.isEmpty();
-        String message = buildDuplicateMessage(codeDuplicate, similarAssets);
+        String message = buildDuplicateMessage(codeDuplicate, similarAssets, asset.getEntryDate());
 
         return DuplicateCheckResult.builder()
                 .duplicate(hasDuplicate)
@@ -58,7 +65,7 @@ public class ToolingAssetService {
                 .build();
     }
 
-    private String buildDuplicateMessage(boolean codeDuplicate, List<ToolingAsset> similarAssets) {
+    private String buildDuplicateMessage(boolean codeDuplicate, List<ToolingAsset> similarAssets, LocalDate currentEntryDate) {
         StringBuilder sb = new StringBuilder();
         if (codeDuplicate) {
             sb.append("⚠️ 工装编号已存在，无法录入。\n");
@@ -71,8 +78,8 @@ public class ToolingAssetService {
                         .append("，产品: ").append(a.getProductName())
                         .append("，工位: ").append(a.getWorkstation())
                         .append("，入库日期: ").append(a.getEntryDate());
-                if (a.getEntryDate() != null) {
-                    long days = Math.abs(ChronoUnit.DAYS.between(a.getEntryDate(), similarAssets.get(0).getEntryDate()));
+                if (a.getEntryDate() != null && currentEntryDate != null) {
+                    long days = Math.abs(ChronoUnit.DAYS.between(a.getEntryDate(), currentEntryDate));
                     sb.append("（相差").append(days).append("天）");
                 }
                 sb.append("\n");
@@ -97,9 +104,28 @@ public class ToolingAssetService {
         return toolingAssetRepository.save(asset);
     }
 
-    public ToolingAsset updateAsset(Long id, ToolingAsset asset) {
+    public ToolingAsset updateAsset(Long id, ToolingAsset asset, boolean forceUpdate) {
         ToolingAsset existing = toolingAssetRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("工装不存在: " + id));
+
+        boolean codeChanged = !existing.getToolingCode().equals(asset.getToolingCode());
+        if (codeChanged) {
+            if (toolingAssetRepository.findByToolingCode(asset.getToolingCode()).isPresent()) {
+                throw new RuntimeException("工装编号已存在: " + asset.getToolingCode());
+            }
+        }
+
+        asset.setId(id);
+        if (!forceUpdate) {
+            DuplicateCheckResult check = checkDuplicate(asset);
+            if (check.isDuplicate() && !check.isCodeDuplicate()) {
+                throw new DuplicateWarningException(check.getMessage(), check.getSimilarAssets());
+            }
+            if (check.isCodeDuplicate()) {
+                throw new RuntimeException("工装编号已存在: " + asset.getToolingCode());
+            }
+        }
+
         existing.setToolingCode(asset.getToolingCode());
         existing.setProductName(asset.getProductName());
         existing.setWorkstation(asset.getWorkstation());
