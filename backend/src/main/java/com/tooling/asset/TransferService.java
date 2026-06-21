@@ -19,6 +19,7 @@ public class TransferService {
 
     private final TransferRecordRepository transferRecordRepository;
     private final ToolingAssetRepository toolingAssetRepository;
+    private final WorkstationCapacityService workstationCapacityService;
 
     public TransferRecord transfer(String toolingCode, String fromWorkstation, String toWorkstation, String operator, String remark) {
         if (operator == null || operator.trim().isEmpty()) {
@@ -37,6 +38,8 @@ public class TransferService {
         if (actualFromWorkstation != null && actualFromWorkstation.equals(toWorkstation)) {
             throw new BusinessException("目标工位与当前工位相同，无需移位");
         }
+
+        workstationCapacityService.validateCapacityForTransfer(toWorkstation);
 
         asset.setWorkstation(toWorkstation);
         asset.setStatus(ToolingStatus.TRANSFERRED);

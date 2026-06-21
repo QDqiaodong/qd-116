@@ -1,5 +1,75 @@
 <template>
   <div class="inventory-check">
+    <el-card class="batch-panel" shadow="never" v-if="latestBatch">
+      <template #header>
+        <div class="batch-panel-header">
+          <div class="batch-title">
+            <span class="batch-label">清点批次</span>
+            <span class="batch-name">{{ latestBatch.batchName || latestBatch.batchMonth }}</span>
+            <el-tag size="small" :type="batchStatusTagType(latestBatch.status)" effect="dark">
+              {{ batchStatusLabel(latestBatch.status) }}
+            </el-tag>
+          </div>
+          <div class="batch-info">
+            <span class="bi-item"><i>月份</i><b>{{ latestBatch.batchMonth }}</b></span>
+            <span class="bi-item"><i>账面数</i><b>{{ latestBatch.totalBookCount }}</b></span>
+            <span class="bi-item"><i>报废排除</i><b>{{ latestBatch.scrappedExcludedCount }}</b></span>
+            <span class="bi-item" v-if="latestBatch.freezeTime"><i>冻结时间</i><b>{{ latestBatch.freezeTime?.slice(0,16) }}</b></span>
+            <span class="bi-item" v-if="latestBatch.creator"><i>创建人</i><b>{{ latestBatch.creator }}</b></span>
+          </div>
+          <div class="batch-actions">
+            <el-button size="small" type="warning" plain :icon="SwitchFilled"
+              @click="doFreezeBatch(latestBatch)"
+              v-if="latestBatch.status === 'DRAFT'">
+              冻结账面
+            </el-button>
+            <el-button size="small" type="info" plain :icon="Refresh"
+              @click="doUnfreezeBatch(latestBatch)"
+              v-if="latestBatch.status === 'FROZEN'">
+              解冻
+            </el-button>
+            <el-button size="small" type="success" plain :icon="Lock"
+              @click="doCloseBatch(latestBatch)"
+              v-if="latestBatch.status === 'FROZEN'">
+              关闭批次
+            </el-button>
+          </div>
+        </div>
+      </template>
+      <div class="batch-tip" v-if="latestBatch.status === 'DRAFT'">
+        <el-alert type="info" :closable="false" show-icon
+          title="当前批次为草稿状态，请确认账面数据无误后点击「冻结账面」生成稳定的盘点基准快照。">
+        </el-alert>
+      </div>
+      <div class="batch-tip" v-else-if="latestBatch.status === 'FROZEN'">
+        <el-alert type="success" :closable="false" show-icon
+          :title="`批次已冻结，账面快照共 ${batchSnapshots.length} 条工装记录，所有差异对比将以此快照为基准。`">
+        </el-alert>
+      </div>
+      <div class="batch-tip" v-else-if="latestBatch.status === 'CLOSED'">
+        <el-alert type="success" :closable="false" show-icon
+          :title="`批次已关闭，由 ${latestBatch.closer} 于 ${latestBatch.closeTime?.slice(0,16)} 归档。`">
+        </el-alert>
+      </div>
+    </el-card>
+
+    <el-card class="capacity-panel" shadow="never" v-if="workstationCapacities.length">
+      <template #header>
+        <div class="capacity-panel-header">
+          <span class="capacity-title">工位容量配置</span>
+          <span class="capacity-sub">共配置 {{ workstationCapacities.length }} 个工位，建档或移位时将自动校验容量</span>
+        </div>
+      </template>
+      <div class="capacity-list">
+        <div class="capacity-item" v-for="c in workstationCapacities" :key="c.id"
+          @click="doCheckCapacity(c.workstation)" :title="点击查看实时容量">
+          <span class="cap-ws">{{ c.workstation }}</span>
+          <el-tag size="small" type="info">{{ c.region }}</el-tag>
+          <span class="cap-value">上限 <b>{{ c.maxCapacity }}</b> 件</span>
+        </div>
+      </div>
+    </el-card>
+
     <div class="toolbar">
       <div class="latest-info" v-if="summaryStats">
         <div class="info-card">
@@ -44,6 +114,7 @@
         <el-button type="primary" plain :icon="CircleCheck" @click="goToClosure" v-if="summaryStats && summaryStats.totalPending > 0">
           处理差异 ({{ summaryStats.totalPending }})
         </el-button>
+        <el-button type="warning" :icon="SwitchFilled" @click="openBatchDialog">创建批次</el-button>
         <el-button type="success" :icon="Plus" @click="openDialog">新增清点</el-button>
       </div>
     </div>
@@ -262,14 +333,46 @@
         <el-button type="warning" :loading="markLoading" @click="confirmMarkMisplaced">确认标记错位</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="batchDialogVisible" title="创建清点批次" width="480px" destroy-on-close>
+      <el-form ref="batchFormRef" :model="batchForm" :rules="batchRules" label-width="100px">
+        <el-form-item label="清点月份" prop="batchMonth">
+          <el-date-picker
+            v-model="batchForm.batchMonth"
+            type="month"
+            placeholder="选择月份"
+            value-format="YYYY-MM"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="批次名称">
+          <el-input v-model="batchForm.batchName" placeholder="留空则使用默认名称（月份+月度盘点）" />
+        </el-form-item>
+        <el-form-item label="创建人" prop="creator">
+          <el-input v-model="batchForm.creator" placeholder="请输入创建人姓名" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="batchForm.remark" type="textarea" :rows="2" placeholder="请输入备注（可选）" />
+        </el-form-item>
+      </el-form>
+      <div class="batch-tip" style="padding:0 20px 10px">
+        <el-alert type="info" :closable="false" size="small" show-icon
+          title="创建后为草稿状态，需手动点击「冻结账面」生成工装工位快照作为盘点基准。">
+        </el-alert>
+      </div>
+      <template #footer>
+        <el-button @click="batchDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="batchSubmitting" @click="handleBatchSubmit">创建批次</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, CircleCheck } from '@element-plus/icons-vue'
+import { Plus, CircleCheck, SwitchFilled, Lock, Refresh } from '@element-plus/icons-vue'
 import {
   listChecks,
   createCheck,
@@ -281,6 +384,15 @@ import {
   markMatch,
   countPendingDiffs,
   getInventorySummaryStats,
+  createInventoryBatch,
+  freezeInventoryBatch,
+  unfreezeInventoryBatch,
+  closeInventoryBatch,
+  listInventoryBatches,
+  getLatestInventoryBatch,
+  listInventoryBatchSnapshotsByMonth,
+  listWorkstationCapacities,
+  checkWorkstationCapacity,
 } from '../api/tooling'
 
 const router = useRouter()
@@ -294,7 +406,27 @@ const pendingCounts = reactive({ total: 0, missing: 0, misplaced: 0, extra: 0 })
 const activeRegions = ref(['注塑机区', '模具库', '待检区', '其他'])
 const markLoading = ref(false)
 
+const batches = ref([])
+const latestBatch = ref(null)
+const batchSnapshots = ref([])
+const batchDialogVisible = ref(false)
+const batchSubmitting = ref(false)
+const workstationCapacities = ref([])
+const capacityDialogVisible = ref(false)
+
 const REGION_ORDER = ['注塑机区', '模具库', '待检区', '其他']
+
+const batchForm = reactive({
+  batchMonth: '',
+  batchName: '',
+  creator: '',
+  remark: '',
+})
+
+const batchRules = {
+  batchMonth: [{ required: true, message: '请选择清点月份', trigger: 'change' }],
+  creator: [{ required: true, message: '请输入创建人', trigger: 'blur' }],
+}
 
 const regionOf = (ws) => {
   if (!ws) return '其他'
@@ -317,6 +449,16 @@ const assetStatusTagType = (status) => {
 const handleTypeLabel = (type) => {
   const map = { RECOVERED: '确认找回', CORRECTED_WORKSTATION: '修正工位', SCRAPPED: '转报废', REGISTERED: '补录登记' }
   return map[type] || type || '-'
+}
+
+const batchStatusLabel = (status) => {
+  const map = { DRAFT: '草稿', FROZEN: '已冻结', CLOSED: '已关闭' }
+  return map[status] || status || '-'
+}
+
+const batchStatusTagType = (status) => {
+  const map = { DRAFT: 'info', FROZEN: 'warning', CLOSED: 'success' }
+  return map[status] || 'info'
 }
 
 const regionStatMap = computed(() => {
@@ -426,6 +568,162 @@ const fetchSummaryStats = async () => {
     summaryStats.value = res.data || null
   } catch {
     summaryStats.value = null
+  }
+}
+
+const fetchBatches = async () => {
+  try {
+    const res = await listInventoryBatches()
+    batches.value = res.data || []
+  } catch {
+    batches.value = []
+  }
+}
+
+const fetchLatestBatch = async () => {
+  try {
+    const res = await getLatestInventoryBatch()
+    latestBatch.value = res.data || null
+  } catch {
+    latestBatch.value = null
+  }
+}
+
+const fetchBatchSnapshots = async () => {
+  if (!latestBatch.value || !latestBatch.value.batchMonth || latestBatch.value.status === 'DRAFT') {
+    batchSnapshots.value = []
+    return
+  }
+  try {
+    const res = await listInventoryBatchSnapshotsByMonth(latestBatch.value.batchMonth)
+    batchSnapshots.value = res.data || []
+  } catch {
+    batchSnapshots.value = []
+  }
+}
+
+const fetchWorkstationCapacities = async () => {
+  try {
+    const res = await listWorkstationCapacities({})
+    workstationCapacities.value = res.data || []
+  } catch {
+    workstationCapacities.value = []
+  }
+}
+
+const openBatchDialog = () => {
+  const now = new Date()
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  Object.assign(batchForm, {
+    batchMonth: defaultMonth,
+    batchName: '',
+    creator: '',
+    remark: '',
+  })
+  batchDialogVisible.value = true
+}
+
+const batchFormRef = ref(null)
+
+const handleBatchSubmit = async () => {
+  const valid = await batchFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  batchSubmitting.value = true
+  try {
+    await createInventoryBatch({
+      batchMonth: batchForm.batchMonth,
+      batchName: batchForm.batchName || undefined,
+      creator: batchForm.creator,
+      remark: batchForm.remark || undefined,
+    })
+    ElMessage.success('清点批次创建成功')
+    batchDialogVisible.value = false
+    await fetchBatches()
+    await fetchLatestBatch()
+  } catch (e) {
+    ElMessage.error(e?.message || '创建批次失败')
+  } finally {
+    batchSubmitting.value = false
+  }
+}
+
+const doFreezeBatch = async (batch) => {
+  try {
+    await ElMessageBox.confirm(
+      `确认冻结批次「${batch.batchName || batch.batchMonth}」？\n冻结后将快照当前所有工装的账面工位与状态，作为后续差异比对的稳定基准。冻结后可解冻重新生成快照。`,
+      '冻结批次确认',
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    const operator = latestCheck.value?.checker || 'admin'
+    await freezeInventoryBatch(batch.id, { freezer: operator })
+    ElMessage.success('批次冻结成功，账面快照已生成')
+    await fetchBatches()
+    await fetchLatestBatch()
+    await fetchBatchSnapshots()
+  } catch (e) {
+    ElMessage.error('冻结失败：' + (e?.message || ''))
+  }
+}
+
+const doUnfreezeBatch = async (batch) => {
+  try {
+    await ElMessageBox.confirm(
+      `确认解冻批次「${batch.batchName || batch.batchMonth}」？\n解冻后将清除已生成的账面快照，可重新冻结生成新的快照。`,
+      '解冻批次确认',
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    const operator = latestCheck.value?.checker || 'admin'
+    await unfreezeInventoryBatch(batch.id, { operator })
+    ElMessage.success('批次已解冻，快照已清除')
+    await fetchBatches()
+    await fetchLatestBatch()
+    batchSnapshots.value = []
+  } catch (e) {
+    ElMessage.error('解冻失败：' + (e?.message || ''))
+  }
+}
+
+const doCloseBatch = async (batch) => {
+  try {
+    await ElMessageBox.confirm(
+      `确认关闭批次「${batch.batchName || batch.batchMonth}」？\n关闭后批次不可再修改，差异处理结果将永久归档。`,
+      '关闭批次确认',
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    const operator = latestCheck.value?.checker || 'admin'
+    await closeInventoryBatch(batch.id, { closer: operator })
+    ElMessage.success('批次已关闭')
+    await fetchBatches()
+    await fetchLatestBatch()
+  } catch (e) {
+    ElMessage.error('关闭失败：' + (e?.message || ''))
+  }
+}
+
+const doCheckCapacity = async (workstation) => {
+  if (!workstation) return
+  try {
+    const res = await checkWorkstationCapacity(workstation)
+    const data = res.data || {}
+    ElMessage({
+      message: data.message || '容量查询完成',
+      type: data.sufficient ? 'success' : 'warning',
+      duration: 4000,
+    })
+  } catch (e) {
+    ElMessage.error('容量查询失败：' + (e?.message || ''))
   }
 }
 
@@ -637,12 +935,155 @@ onMounted(() => {
     fetchSummaryStats()
   })
   fetchPendingCounts()
+  fetchBatches()
+  fetchLatestBatch().then(() => {
+    fetchBatchSnapshots()
+  })
+  fetchWorkstationCapacities()
 })
 </script>
 
 <style scoped>
 .inventory-check {
   min-height: 100%;
+}
+
+.batch-panel {
+  margin-bottom: 12px;
+  border: 1px solid #ebeef5;
+  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
+}
+
+.batch-panel :deep(.el-card__header) {
+  padding: 12px 20px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.batch-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.batch-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.batch-label {
+  font-size: 14px;
+  color: #909399;
+  font-weight: 500;
+}
+
+.batch-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #303133;
+}
+
+.batch-info {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.bi-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.bi-item i {
+  font-style: normal;
+  color: #909399;
+  font-size: 12px;
+}
+
+.bi-item b {
+  font-weight: 600;
+  color: #303133;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.batch-tip {
+  margin-top: 8px;
+}
+
+.capacity-panel {
+  margin-bottom: 12px;
+  border: 1px solid #ebeef5;
+}
+
+.capacity-panel :deep(.el-card__header) {
+  padding: 10px 20px;
+}
+
+.capacity-panel-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.capacity-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.capacity-sub {
+  font-size: 12px;
+  color: #909399;
+}
+
+.capacity-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.capacity-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.capacity-item:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+}
+
+.cap-ws {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.cap-value {
+  font-size: 12px;
+  color: #606266;
+}
+
+.cap-value b {
+  color: #409eff;
+  font-weight: 700;
 }
 
 .toolbar {

@@ -25,6 +25,7 @@ public class ToolingAssetService {
     private final TransferRecordRepository transferRecordRepository;
     private final ToolingInventoryDiffRepository toolingInventoryDiffRepository;
     private final ScrapRecordRepository scrapRecordRepository;
+    private final WorkstationCapacityService workstationCapacityService;
 
     public DuplicateCheckResult checkDuplicate(ToolingAsset asset) {
         boolean codeDuplicate = false;
@@ -99,6 +100,7 @@ public class ToolingAssetService {
                 throw new DuplicateWarningException(check.getMessage(), check.getSimilarAssets());
             }
         }
+        workstationCapacityService.validateCapacityForAdd(asset.getWorkstation());
         asset.setCreateTime(LocalDateTime.now());
         asset.setUpdateTime(LocalDateTime.now());
         return toolingAssetRepository.save(asset);
@@ -124,6 +126,19 @@ public class ToolingAssetService {
             if (check.isCodeDuplicate()) {
                 throw new RuntimeException("工装编号已存在: " + asset.getToolingCode());
             }
+        }
+
+        boolean workstationChanged = (existing.getWorkstation() == null && asset.getWorkstation() != null)
+                || (existing.getWorkstation() != null && !existing.getWorkstation().equals(asset.getWorkstation()));
+        boolean statusChangedToScrapped = !ToolingStatus.SCRAPPED.equals(existing.getStatus())
+                && ToolingStatus.SCRAPPED.equals(asset.getStatus());
+        boolean statusChangedFromScrapped = ToolingStatus.SCRAPPED.equals(existing.getStatus())
+                && !ToolingStatus.SCRAPPED.equals(asset.getStatus());
+
+        if (workstationChanged && !statusChangedToScrapped) {
+            workstationCapacityService.validateCapacityForAdd(asset.getWorkstation());
+        } else if (!workstationChanged && statusChangedFromScrapped) {
+            workstationCapacityService.validateCapacityForAdd(asset.getWorkstation());
         }
 
         existing.setToolingCode(asset.getToolingCode());
