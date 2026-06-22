@@ -13,4 +13,6 @@ public interface HighRiskTransferApprovalRepository extends JpaRepository<HighRi
     List<HighRiskTransferApproval> findByStatusOrderByApplyTimeDesc(ApprovalStatus status);
 
     Optional<HighRiskTransferApproval> findFirstByToolingCodeAndStatusInOrderByApplyTimeDesc(String toolingCode, List<ApprovalStatus> statuses);
+
+    void deleteByToolingCode(String toolingCode);
 }

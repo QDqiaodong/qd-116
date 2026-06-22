@@ -41,6 +41,10 @@ public class ToolingCodeService {
     }
 
     public CodeValidationResult validateLocatorBlockCode(String toolingCode) {
+        return validateLocatorBlockCode(toolingCode, null);
+    }
+
+    public CodeValidationResult validateLocatorBlockCode(String toolingCode, Long excludeId) {
         if (toolingCode == null || toolingCode.trim().isEmpty()) {
             return CodeValidationResult.builder()
                     .valid(false)
@@ -79,7 +83,14 @@ public class ToolingCodeService {
             }
         }
 
-        boolean exists = toolingAssetRepository.existsByToolingCode(trimmedCode);
+        boolean exists;
+        if (excludeId != null) {
+            exists = toolingAssetRepository.findByToolingCode(trimmedCode)
+                    .filter(a -> !a.getId().equals(excludeId))
+                    .isPresent();
+        } else {
+            exists = toolingAssetRepository.existsByToolingCode(trimmedCode);
+        }
 
         if (exists) {
             String suggestedCode = generateNextLocatorBlockCode();

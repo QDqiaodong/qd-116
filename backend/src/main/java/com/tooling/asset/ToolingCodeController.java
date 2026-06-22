@@ -22,8 +22,10 @@ public class ToolingCodeController {
     }
 
     @PostMapping("/locator-block/validate")
-    public Result<CodeValidationResult> validateLocatorBlockCode(@RequestParam String toolingCode) {
-        CodeValidationResult result = toolingCodeService.validateLocatorBlockCode(toolingCode);
+    public Result<CodeValidationResult> validateLocatorBlockCode(
+            @RequestParam String toolingCode,
+            @RequestParam(required = false) Long excludeId) {
+        CodeValidationResult result = toolingCodeService.validateLocatorBlockCode(toolingCode, excludeId);
         return Result.ok(result);
     }
 

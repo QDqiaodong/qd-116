@@ -30,6 +30,7 @@ public class ToolingAssetService {
     private final ToolingInventoryDiffRepository toolingInventoryDiffRepository;
     private final ScrapRecordRepository scrapRecordRepository;
     private final WorkstationCapacityService workstationCapacityService;
+    private final HighRiskTransferApprovalRepository highRiskTransferApprovalRepository;
 
     public DuplicateCheckResult checkDuplicate(ToolingAsset asset) {
         boolean codeDuplicate = false;
@@ -190,6 +191,7 @@ public class ToolingAssetService {
         transferRecordRepository.deleteByToolingCode(toolingCode);
         toolingInventoryDiffRepository.deleteByToolingCode(toolingCode);
         scrapRecordRepository.deleteByToolingCode(toolingCode);
+        highRiskTransferApprovalRepository.deleteByToolingCode(toolingCode);
         toolingAssetRepository.delete(asset);
     }
 

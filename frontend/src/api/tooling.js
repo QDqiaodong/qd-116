@@ -160,8 +160,12 @@ export function getNextLocatorBlockCode() {
   return request.get('/code-rule/locator-block/next')
 }
 
-export function validateLocatorBlockCode(toolingCode) {
-  return request.post('/code-rule/locator-block/validate', null, { params: { toolingCode } })
+export function validateLocatorBlockCode(toolingCode, excludeId) {
+  const params = { toolingCode }
+  if (excludeId !== undefined && excludeId !== null) {
+    params.excludeId = excludeId
+  }
+  return request.post('/code-rule/locator-block/validate', null, { params })
 }
 
 export function getLocatorBlockCodeInfo() {

@@ -90,7 +90,7 @@
           <div class="card-actions">
             <el-button size="small" :icon="Edit" @click="openDialog(item)">编辑</el-button>
             <el-button size="small" type="primary" :icon="Clock" @click="viewTrace(item)">轨迹</el-button>
-            <el-button size="small" type="warning" :icon="Switch" @click="handleTransfer(item)" :disabled="item.status !== 'IN_USE'">移位</el-button>
+            <el-button size="small" type="warning" :icon="Switch" @click="handleTransfer(item)" :disabled="item.status === 'SCRAPPED'">移位</el-button>
             <el-button size="small" type="danger" :icon="CircleClose" @click="handleScrap(item)" :disabled="item.status === 'SCRAPPED'">报废</el-button>
             <el-button size="small" type="info" :icon="Delete" @click="handleDelete(item)"></el-button>
           </div>
@@ -567,6 +567,10 @@ const openDialog = (item, precheckImageUrl, precheckFileName) => {
       remark: item.remark || '',
       statusChangeRemark: '',
     })
+    codeValidation.valid = true
+    codeValidation.formatValid = true
+    codeValidation.exists = false
+    codeValidation.message = '编号校验通过'
     originalStatus.value = item.status || ''
     originalWorkstation.value = item.workstation || ''
     fileList.value = item.imageUrl
@@ -628,7 +632,8 @@ const validateCode = async (code) => {
     return
   }
   try {
-    const res = await validateLocatorBlockCode(code.trim())
+    const excludeId = isEdit.value ? editId.value : null
+    const res = await validateLocatorBlockCode(code.trim(), excludeId)
     const data = res.data || {}
     codeValidation.valid = data.valid || false
     codeValidation.formatValid = data.formatValid || false
