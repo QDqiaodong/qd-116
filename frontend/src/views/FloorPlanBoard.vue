@@ -34,7 +34,7 @@
 
     <div class="floor-container" v-loading="loading">
       <div class="floor-plan">
-        <div class="zone zone-injection">
+        <div class="zone zone-injection" v-if="injectionMachines.length">
           <div class="zone-header">
             <span class="zone-title">注塑机区</span>
             <span class="zone-count">共 {{ injectionTotal }} 块</span>
@@ -75,7 +75,7 @@
         </div>
 
         <div class="zone-row">
-          <div class="zone zone-mold">
+          <div class="zone zone-mold" v-if="moldAreas.length">
             <div class="zone-header">
               <span class="zone-title">模具库</span>
               <span class="zone-count">共 {{ moldTotal }} 块</span>
@@ -112,7 +112,7 @@
             </div>
           </div>
 
-          <div class="zone zone-inspection">
+          <div class="zone zone-inspection" v-if="inspectionAreas.length">
             <div class="zone-header">
               <span class="zone-title">待检区</span>
               <span class="zone-count">共 {{ inspectionTotal }} 块</span>
@@ -150,7 +150,7 @@
           </div>
         </div>
 
-        <div class="zone zone-repair">
+        <div class="zone zone-repair" v-if="repairAreas.length">
           <div class="zone-header">
             <span class="zone-title">维修区</span>
             <span class="zone-count">共 {{ repairTotal }} 块</span>
@@ -160,6 +160,43 @@
               v-for="ws in repairAreas"
               :key="ws.name"
               class="zone-block block-wide"
+              :class="{ 'is-active': selectedWorkstation === ws.name, 'is-empty': ws.total === 0 }"
+              @click="toggleWorkstation(ws.name)"
+            >
+              <div class="block-label">{{ ws.name }}</div>
+              <div class="block-color-bar">
+                <div
+                  class="color-segment color-in-use"
+                  :style="{ width: getBarWidth(ws.inUse, ws.total) }"
+                ></div>
+                <div
+                  class="color-segment color-transferred"
+                  :style="{ width: getBarWidth(ws.transferred, ws.total) }"
+                ></div>
+                <div
+                  class="color-segment color-scrapped"
+                  :style="{ width: getBarWidth(ws.scrapped, ws.total) }"
+                ></div>
+              </div>
+              <div class="block-stats">
+                <span class="stat-pill pill-in-use">在用 {{ ws.inUse }}</span>
+                <span class="stat-pill pill-transferred">移位 {{ ws.transferred }}</span>
+                <span class="stat-pill pill-scrapped">报废 {{ ws.scrapped }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="zone zone-other" v-if="otherAreas.length">
+          <div class="zone-header">
+            <span class="zone-title">其他区域</span>
+            <span class="zone-count">共 {{ otherTotal }} 块</span>
+          </div>
+          <div class="zone-content">
+            <div
+              v-for="ws in otherAreas"
+              :key="ws.name"
+              class="zone-block"
               :class="{ 'is-active': selectedWorkstation === ws.name, 'is-empty': ws.total === 0 }"
               @click="toggleWorkstation(ws.name)"
             >
@@ -248,22 +285,57 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Location, Picture, Clock, Close } from '@element-plus/icons-vue'
-import { listAssets } from '../api/tooling'
+import { listAssets, listWorkstationCapacities } from '../api/tooling'
 
 const router = useRouter()
 
 const loading = ref(false)
 const assets = ref([])
 const selectedWorkstation = ref('')
+const workstationCapacities = ref([])
 
-const INJECTION_MACHINES = [
-  '注塑机01', '注塑机02', '注塑机03', '注塑机04',
-  '注塑机05', '注塑机06', '注塑机07', '注塑机08',
-]
+const workstationsByRegion = computed(() => {
+  const groups = {}
+  workstationCapacities.value.forEach((cap) => {
+    const region = cap.region || '其他'
+    if (!groups[region]) groups[region] = []
+    groups[region].push(cap.workstation)
+  })
+  const ungrouped = new Set()
+  assets.value.forEach((a) => {
+    if (a.workstation && !workstationCapacities.value.some((c) => c.workstation === a.workstation)) {
+      ungrouped.add(a.workstation)
+    }
+  })
+  if (ungrouped.size > 0) {
+    if (!groups['其他']) groups['其他'] = []
+    ungrouped.forEach((ws) => {
+      if (!groups['其他'].includes(ws)) groups['其他'].push(ws)
+    })
+  }
+  Object.keys(groups).forEach((k) => groups[k].sort())
+  return groups
+})
 
-const MOLD_AREAS = ['模具库A区', '模具库B区']
-const INSPECTION_AREAS = ['待检区']
-const REPAIR_AREAS = ['维修区']
+const injectionMachines = computed(() =>
+  (workstationsByRegion.value['注塑机区'] || []).map((name) => ({ name, ...getWsStats(name) }))
+)
+
+const moldAreas = computed(() =>
+  (workstationsByRegion.value['模具库'] || []).map((name) => ({ name, ...getWsStats(name) }))
+)
+
+const inspectionAreas = computed(() =>
+  (workstationsByRegion.value['待检区'] || []).map((name) => ({ name, ...getWsStats(name) }))
+)
+
+const repairAreas = computed(() =>
+  (workstationsByRegion.value['维修区'] || []).map((name) => ({ name, ...getWsStats(name) }))
+)
+
+const otherAreas = computed(() =>
+  (workstationsByRegion.value['其他'] || []).map((name) => ({ name, ...getWsStats(name) }))
+)
 
 const statusLabel = (status) => {
   const map = { IN_USE: '在用', TRANSFERRED: '已移位', SCRAPPED: '已报废' }
@@ -293,22 +365,6 @@ const getWsStats = (name) => {
   return wsStats.value[name] || { inUse: 0, transferred: 0, scrapped: 0, total: 0 }
 }
 
-const injectionMachines = computed(() =>
-  INJECTION_MACHINES.map((name) => ({ name, ...getWsStats(name) }))
-)
-
-const moldAreas = computed(() =>
-  MOLD_AREAS.map((name) => ({ name, ...getWsStats(name) }))
-)
-
-const inspectionAreas = computed(() =>
-  INSPECTION_AREAS.map((name) => ({ name, ...getWsStats(name) }))
-)
-
-const repairAreas = computed(() =>
-  REPAIR_AREAS.map((name) => ({ name, ...getWsStats(name) }))
-)
-
 const injectionTotal = computed(() =>
   injectionMachines.value.reduce((sum, ws) => sum + ws.total, 0)
 )
@@ -323,6 +379,10 @@ const inspectionTotal = computed(() =>
 
 const repairTotal = computed(() =>
   repairAreas.value.reduce((sum, ws) => sum + ws.total, 0)
+)
+
+const otherTotal = computed(() =>
+  otherAreas.value.reduce((sum, ws) => sum + ws.total, 0)
 )
 
 const totals = computed(() => {
@@ -354,6 +414,15 @@ const viewTrace = (item) => {
   router.push({ path: '/trace', query: { code: item.toolingCode } })
 }
 
+const fetchWorkstationCapacities = async () => {
+  try {
+    const res = await listWorkstationCapacities({})
+    workstationCapacities.value = res.data || []
+  } catch {
+    workstationCapacities.value = []
+  }
+}
+
 const fetchAssets = async () => {
   loading.value = true
   try {
@@ -366,7 +435,8 @@ const fetchAssets = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchWorkstationCapacities()
   fetchAssets()
 })
 </script>
@@ -553,6 +623,10 @@ onMounted(() => {
 
 .zone-repair .zone-title::before {
   background: linear-gradient(180deg, #f56c6c 0%, #f78989 100%);
+}
+
+.zone-other .zone-title::before {
+  background: linear-gradient(180deg, #909399 0%, #a6a9ad 100%);
 }
 
 .zone-count {

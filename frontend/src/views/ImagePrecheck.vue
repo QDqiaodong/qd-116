@@ -127,7 +127,11 @@
         </el-table-column>
         <el-table-column label="状态" width="110" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.overLimit" type="danger" size="small" effect="dark">
+            <el-tag v-if="row.processing" type="info" size="small" effect="dark">
+              <el-icon class="is-loading" style="margin-right: 2px"><Loading /></el-icon>
+              处理中
+            </el-tag>
+            <el-tag v-else-if="row.overLimit" type="danger" size="small" effect="dark">
               <el-icon style="margin-right: 2px"><Warning /></el-icon>
               超限
             </el-tag>
@@ -151,9 +155,16 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" align="center" fixed="right">
+        <el-table-column label="操作" width="260" align="center" fixed="right">
           <template #default="{ row, $index }">
-            <el-button type="primary" size="small" :icon="Edit" @click="goToRegister(row)">建档</el-button>
+            <el-button
+              type="primary"
+              size="small"
+              :icon="Edit"
+              :loading="registeringMap[row.id]"
+              :disabled="!row.compressedFile"
+              @click="goToRegister(row)"
+            >建档</el-button>
             <el-button type="info" size="small" :icon="ZoomIn" @click="previewImage(row)">查看</el-button>
             <el-button type="danger" size="small" :icon="Delete" @click="removeItem($index)">删除</el-button>
           </template>
@@ -223,7 +234,7 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  UploadFilled, Picture, Delete, InfoFilled, Warning, CircleCheck, Edit, ZoomIn, Switch } from '@element-plus/icons-vue'
+  UploadFilled, Picture, Delete, InfoFilled, Warning, CircleCheck, Edit, ZoomIn, Switch, Loading } from '@element-plus/icons-vue'
 import { compressImage, validateImageFile } from '../utils/compress'
 import { uploadFile } from '../api/tooling'
 
@@ -235,6 +246,7 @@ const MAX_DIMENSION_LIMIT = 800
 const imageList = ref([])
 const previewVisible = ref(false)
 const currentPreview = ref(null)
+const registeringMap = reactive({})
 
 const totalOriginalSize = computed(() => imageList.value.reduce((sum, item) => sum + (item.originalSize || 0), 0))
 const totalCompressedSize = computed(() => imageList.value.reduce((sum, item) => sum + (item.compressedSize || 0), 0))
@@ -311,6 +323,8 @@ const handleFileChange = async (uploadFile) => {
     compressionRate: 0,
     overLimit: false,
     overLimitReasons: [],
+    processing: true,
+    serverImageUrl: '',
   })
 
   imageList.value.push(item)
@@ -340,6 +354,8 @@ const handleFileChange = async (uploadFile) => {
     } catch (err) {
       console.error('处理图片失败:', err)
       ElMessage.error(rawFile.name + ': 处理失败')
+    } finally {
+      item.processing = false
     }
   })();
 }
@@ -374,13 +390,31 @@ const previewImage = (row) => {
 }
 
 const goToRegister = async (row) => {
-  router.push({
-    path: '/assets',
-    query: {
-      precheckImage: row.compressedUrl,
-      precheckFileName: row.fileName,
-    },
-  })
+  if (!row.compressedFile) {
+    ElMessage.warning('图片处理中，请稍候')
+    return
+  }
+  registeringMap[row.id] = true
+  try {
+    let imageUrl = row.serverImageUrl
+    if (!imageUrl) {
+      const uploadRes = await uploadFile(row.compressedFile)
+      imageUrl = uploadRes.data
+      row.serverImageUrl = imageUrl
+    }
+    router.push({
+      path: '/assets',
+      query: {
+        precheckImage: imageUrl,
+        precheckFileName: row.fileName,
+        precheckUploaded: '1',
+      },
+    })
+  } catch (e) {
+    ElMessage.error('图片上传失败：' + (e?.message || ''))
+  } finally {
+    registeringMap[row.id] = false
+  }
 }
 </script>
 

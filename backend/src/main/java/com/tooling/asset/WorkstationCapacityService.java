@@ -21,6 +21,7 @@ public class WorkstationCapacityService {
         if (workstation.startsWith("注塑机")) return "注塑机区";
         if (workstation.startsWith("模具库")) return "模具库";
         if (workstation.equals("待检区") || workstation.startsWith("待检")) return "待检区";
+        if (workstation.contains("维修")) return "维修区";
         return "其他";
     }
 

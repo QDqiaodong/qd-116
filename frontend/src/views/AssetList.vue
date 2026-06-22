@@ -591,7 +591,11 @@ const openDialog = (item, precheckImageUrl, precheckFileName) => {
     originalStatus.value = ''
     originalWorkstation.value = ''
     if (precheckImageUrl) {
-      fileList.value = [{ name: precheckFileName || 'precheck-image', url: precheckImageUrl, status: 'success' }]
+      if (precheckImageUrl.startsWith('blob:')) {
+        fileList.value = [{ name: precheckFileName || 'precheck-image', url: precheckImageUrl, status: 'ready', needsUpload: true }]
+      } else {
+        fileList.value = [{ name: precheckFileName || 'precheck-image', url: '/api/file/' + precheckImageUrl, status: 'success', uploaded: true, serverUrl: precheckImageUrl }]
+      }
     } else {
       fileList.value = []
     }
@@ -684,7 +688,28 @@ const urlToFile = async (url, fileName) => {
   return new File([blob], fileName || 'image.jpg', { type: blob.type })
 }
 
+const validateImagePresent = () => {
+  if (!fileList.value || fileList.value.length === 0) {
+    throw new Error('请上传工装图片')
+  }
+  const first = fileList.value[0]
+  if (first.url && first.url.startsWith('blob:')) {
+    return true
+  }
+  if (first.raw) {
+    return true
+  }
+  if (first.uploaded || first.serverUrl) {
+    return true
+  }
+  if (first.url && first.url.includes('/api/file/')) {
+    return true
+  }
+  throw new Error('图片无效，请重新上传')
+}
+
 const prepareImage = async () => {
+  validateImagePresent()
   const newFiles = fileList.value.filter((f) => f.raw && f.status !== 'success')
   if (newFiles.length) {
     const rawFiles = newFiles.map((f) => f.raw)
@@ -698,9 +723,11 @@ const prepareImage = async () => {
     const uploadResult = await uploadFile(compressed[0])
     form.imageUrl = uploadResult.data
   } else {
-    const existingFile = fileList.value.find((f) => f.status === 'success' && f.url)
+    const existingFile = fileList.value.find((f) => (f.status === 'success' || f.uploaded) && f.url)
     if (existingFile && existingFile.url) {
-      if (existingFile.url.startsWith('blob:')) {
+      if (existingFile.serverUrl) {
+        form.imageUrl = existingFile.serverUrl
+      } else if (existingFile.url.startsWith('blob:')) {
         const fileFromBlob = await urlToFile(existingFile.url, existingFile.name || 'precheck-image.jpg')
         const validation = validateImageFile(fileFromBlob)
         if (!validation.valid) {
@@ -712,7 +739,24 @@ const prepareImage = async () => {
       } else {
         form.imageUrl = existingFile.url.replace('/api/file/', '')
       }
+    } else {
+      const needsUploadFile = fileList.value.find((f) => f.needsUpload && f.url)
+      if (needsUploadFile && needsUploadFile.url) {
+        if (needsUploadFile.url.startsWith('blob:')) {
+          const fileFromBlob = await urlToFile(needsUploadFile.url, needsUploadFile.name || 'precheck-image.jpg')
+          const validation = validateImageFile(fileFromBlob)
+          if (!validation.valid) {
+            throw new Error(validation.message)
+          }
+          const compressed = await batchCompressImages([fileFromBlob])
+          const uploadResult = await uploadFile(compressed[0])
+          form.imageUrl = uploadResult.data
+        }
+      }
     }
+  }
+  if (!form.imageUrl) {
+    throw new Error('图片上传失败，请重新上传')
   }
 }
 

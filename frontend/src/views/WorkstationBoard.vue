@@ -133,39 +133,21 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Location, Picture, Clock, Close } from '@element-plus/icons-vue'
-import { listAssets } from '../api/tooling'
+import { listAssets, listWorkstationCapacities } from '../api/tooling'
 
 const router = useRouter()
 
 const loading = ref(false)
 const assets = ref([])
 const selectedWorkstation = ref('')
+const workstationCapacities = ref([])
 
-const FLOOR_PLAN = [
-  {
-    key: 'injection',
-    name: '注塑机区',
-    workstations: [
-      '注塑机01', '注塑机02', '注塑机03', '注塑机04',
-      '注塑机05', '注塑机06', '注塑机07', '注塑机08',
-    ],
-  },
-  {
-    key: 'mold',
-    name: '模具库',
-    workstations: ['模具库A区', '模具库B区'],
-  },
-  {
-    key: 'inspection',
-    name: '待检区',
-    workstations: ['待检区'],
-  },
-  {
-    key: 'repair',
-    name: '维修区',
-    workstations: ['维修区'],
-  },
-]
+const REGION_ORDER = ['注塑机区', '模具库', '待检区', '维修区', '其他']
+
+const regionKeyOf = (region) => {
+  const map = { '注塑机区': 'injection', '模具库': 'mold', '待检区': 'inspection', '维修区': 'repair' }
+  return map[region] || 'other'
+}
 
 const statusLabel = (status) => {
   const map = { IN_USE: '在用', TRANSFERRED: '已移位', SCRAPPED: '已报废' }
@@ -191,16 +173,40 @@ const wsStats = computed(() => {
   return map
 })
 
-const floorAreas = computed(() =>
-  FLOOR_PLAN.map((area) => {
-    const workstations = area.workstations.map((ws) => {
-      const s = wsStats.value[ws] || { inUse: 0, transferred: 0, scrapped: 0, total: 0 }
-      return { name: ws, ...s }
-    })
-    const total = workstations.reduce((sum, ws) => sum + ws.total, 0)
-    return { ...area, workstations, total }
+const floorAreas = computed(() => {
+  const groups = {}
+  workstationCapacities.value.forEach((cap) => {
+    const region = cap.region || '其他'
+    if (!groups[region]) {
+      groups[region] = []
+    }
+    groups[region].push(cap.workstation)
   })
-)
+  const ungrouped = new Set()
+  assets.value.forEach((a) => {
+    if (a.workstation && !workstationCapacities.value.some((c) => c.workstation === a.workstation)) {
+      ungrouped.add(a.workstation)
+    }
+  })
+  if (ungrouped.size > 0) {
+    if (!groups['其他']) groups['其他'] = []
+    ungrouped.forEach((ws) => {
+      if (!groups['其他'].includes(ws)) groups['其他'].push(ws)
+    })
+  }
+  return REGION_ORDER
+    .filter((r) => groups[r])
+    .map((region) => {
+      const workstations = groups[region]
+        .sort()
+        .map((ws) => {
+          const s = wsStats.value[ws] || { inUse: 0, transferred: 0, scrapped: 0, total: 0 }
+          return { name: ws, ...s }
+        })
+      const total = workstations.reduce((sum, ws) => sum + ws.total, 0)
+      return { key: regionKeyOf(region), name: region, workstations, total }
+    })
+})
 
 const totals = computed(() => {
   const t = { inUse: 0, transferred: 0, scrapped: 0, total: 0 }
@@ -226,6 +232,15 @@ const viewTrace = (item) => {
   router.push({ path: '/trace', query: { code: item.toolingCode } })
 }
 
+const fetchWorkstationCapacities = async () => {
+  try {
+    const res = await listWorkstationCapacities({})
+    workstationCapacities.value = res.data || []
+  } catch {
+    workstationCapacities.value = []
+  }
+}
+
 const fetchAssets = async () => {
   loading.value = true
   try {
@@ -238,7 +253,8 @@ const fetchAssets = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchWorkstationCapacities()
   fetchAssets()
 })
 </script>
@@ -367,10 +383,6 @@ onMounted(() => {
 .floor-plan {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  grid-template-areas:
-    "injection injection"
-    "mold inspection"
-    "repair repair";
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -384,19 +396,15 @@ onMounted(() => {
 }
 
 .area-injection {
-  grid-area: injection;
-}
-
-.area-mold {
-  grid-area: mold;
-}
-
-.area-inspection {
-  grid-area: inspection;
+  grid-column: 1 / -1;
 }
 
 .area-repair {
-  grid-area: repair;
+  grid-column: 1 / -1;
+}
+
+.area-other {
+  grid-column: 1 / -1;
 }
 
 .area-header {
