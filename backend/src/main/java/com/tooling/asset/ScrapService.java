@@ -14,6 +14,7 @@ public class ScrapService {
 
     private final ScrapRecordRepository scrapRecordRepository;
     private final ToolingAssetRepository toolingAssetRepository;
+    private final TransferRecordRepository transferRecordRepository;
 
     public ScrapRecord scrap(String toolingCode, String scrapReason, java.time.LocalDate scrapDate, String operator, String remark, String statusChangeRemark) {
         if (statusChangeRemark == null || statusChangeRemark.trim().isEmpty()) {
@@ -57,5 +58,36 @@ public class ScrapService {
     @Transactional(readOnly = true)
     public List<ScrapRecord> listAll() {
         return scrapRecordRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public ScrapSummaryVO getScrapSummary(String toolingCode) {
+        ToolingAsset asset = toolingAssetRepository.findByToolingCode(toolingCode)
+                .orElseThrow(() -> new BusinessException("工装不存在: " + toolingCode));
+
+        if (ToolingStatus.SCRAPPED.equals(asset.getStatus())) {
+            throw new BusinessException("工装已报废，无需重复报废: " + toolingCode);
+        }
+
+        List<TransferRecord> transfers = transferRecordRepository.findByToolingCodeOrderByTransferTimeDesc(toolingCode);
+
+        LocalDateTime lastTransferTime = null;
+        String lastTransferOperator = null;
+        if (transfers != null && !transfers.isEmpty()) {
+            TransferRecord latest = transfers.get(0);
+            lastTransferTime = latest.getTransferTime();
+            lastTransferOperator = latest.getOperator();
+        }
+
+        return ScrapSummaryVO.builder()
+                .toolingCode(asset.getToolingCode())
+                .productName(asset.getProductName())
+                .workstation(asset.getWorkstation())
+                .imageUrl(asset.getImageUrl())
+                .entryDate(asset.getEntryDate())
+                .lastTransferTime(lastTransferTime)
+                .lastTransferOperator(lastTransferOperator)
+                .status(asset.getStatus())
+                .build();
     }
 }

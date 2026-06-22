@@ -252,7 +252,7 @@
     <el-dialog
       v-model="scrapDialogVisible"
       title="转报废"
-      width="540px"
+      width="560px"
       destroy-on-close
     >
       <el-alert type="error" :closable="false" show-icon style="margin-bottom: 16px">
@@ -260,7 +260,19 @@
       </el-alert>
       <el-form ref="scrapFormRef" :model="scrapForm" :rules="scrapRules" label-width="100px">
         <el-form-item label="报废原因" prop="scrapReason">
-          <el-input v-model="scrapForm.scrapReason" type="textarea" :rows="2" placeholder="请输入报废原因" />
+          <el-select v-model="scrapForm.scrapReason" placeholder="请选择报废原因" style="width: 100%" filterable>
+            <el-option
+              v-for="reason in scrapReasonOptions"
+              :key="reason.reasonCode"
+              :label="reason.reasonName"
+              :value="reason.reasonName"
+            >
+              <div class="option-item">
+                <span class="option-name">{{ reason.reasonName }}</span>
+                <span v-if="reason.remark" class="option-desc">{{ reason.remark }}</span>
+              </div>
+            </el-option>
+          </el-select>
         </el-form-item>
         <el-form-item label="报废日期" prop="scrapDate">
           <el-date-picker
@@ -299,6 +311,7 @@ import {
   handleScrap,
   getLatestCheck,
   listWorkstationNames,
+  listScrapReasons,
 } from '../api/tooling'
 import dayjs from 'dayjs'
 
@@ -418,8 +431,18 @@ const scrapDialogVisible = ref(false)
 const scrapFormRef = ref(null)
 const scrapForm = reactive({ scrapReason: '', scrapDate: '', handler: '', handleRemark: '' })
 const scrapRules = {
-  scrapReason: [{ required: true, message: '请输入报废原因', trigger: 'blur' }],
+  scrapReason: [{ required: true, message: '请选择报废原因', trigger: 'change' }],
   handler: [{ required: true, message: '请输入处理人', trigger: 'blur' }],
+}
+const scrapReasonOptions = ref([])
+
+const fetchScrapReasonOptions = async () => {
+  try {
+    const res = await listScrapReasons('LOCATING_BLOCK', true)
+    scrapReasonOptions.value = res.data || []
+  } catch {
+    /* ignore */
+  }
 }
 
 const formRules = {
@@ -443,6 +466,7 @@ const handleAction = async (cmd, row) => {
     scrapForm.handler = ''
     scrapForm.handleRemark = ''
     scrapDialogVisible.value = true
+    fetchScrapReasonOptions()
   }
 }
 
@@ -704,5 +728,21 @@ onMounted(() => {
 
 :deep(.row-extra:hover > td) {
   background-color: #e1f3d8 !important;
+}
+
+.option-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.option-name {
+  font-size: 14px;
+  color: #303133;
+}
+
+.option-desc {
+  font-size: 12px;
+  color: #909399;
 }
 </style>

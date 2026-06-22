@@ -305,3 +305,11 @@ export function listAllHighRiskTransferApprovals() {
 export function listPendingHighRiskTransferApprovals() {
   return request.get('/high-risk-transfer-approval/pending')
 }
+
+export function listScrapReasons(category, enabledOnly = true) {
+  return request.get('/scrap-reason/list', { params: { category, enabledOnly } })
+}
+
+export function getScrapSummary(toolingCode) {
+  return request.get(`/scrap/summary/${toolingCode}`)
+}

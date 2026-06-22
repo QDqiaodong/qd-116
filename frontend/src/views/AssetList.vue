@@ -250,13 +250,86 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="scrapVisible" title="工装报废" width="480px" destroy-on-close>
-      <el-form ref="scrapFormRef" :model="scrapForm" :rules="scrapRules" label-width="100px">
+    <el-dialog v-model="scrapVisible" title="工装报废" width="560px" destroy-on-close>
+      <div v-if="scrapSummaryLoading" style="text-align:center;padding:20px;">
+        <el-icon class="is-loading" :size="24"><Loading /></el-icon>
+        <div style="margin-top:8px;color:#909399;">正在加载报废摘要...</div>
+      </div>
+      <div v-else-if="scrapSummary" class="scrap-summary-section">
+        <div class="summary-title">
+          <el-icon><WarningFilled /></el-icon>
+          <span>报废确认区</span>
+        </div>
+        <div class="summary-content">
+          <div class="summary-image">
+            <img
+              v-if="scrapSummary.imageUrl"
+              :src="'/api/file/' + scrapSummary.imageUrl"
+              alt="定位块图片"
+            />
+            <div v-else class="summary-image-placeholder">
+              <el-icon :size="40"><Picture /></el-icon>
+              <span>暂无图片</span>
+            </div>
+          </div>
+          <div class="summary-info">
+            <div class="info-row">
+              <span class="info-label">工装编号</span>
+              <span class="info-value code">{{ scrapSummary.toolingCode }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">适配产品</span>
+              <span class="info-value">{{ scrapSummary.productName }}</span>
+            </div>
+            <div class="info-row highlight">
+              <span class="info-label">当前工位</span>
+              <span class="info-value">{{ scrapSummary.workstation }}</span>
+            </div>
+            <div class="info-row highlight">
+              <span class="info-label">最近移位时间</span>
+              <span class="info-value">{{ formatDateTime(scrapSummary.lastTransferTime) || '暂无移位记录' }}</span>
+            </div>
+            <div v-if="scrapSummary.lastTransferOperator" class="info-row">
+              <span class="info-label">最近移位操作人</span>
+              <span class="info-value">{{ scrapSummary.lastTransferOperator }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">入库日期</span>
+              <span class="info-value">{{ scrapSummary.entryDate || '-' }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-warning">
+          <el-alert
+            type="error"
+            :closable="false"
+            show-icon
+            title="⚠️ 报废为不可逆操作"
+          >
+            <template #default>
+              请仔细核对以上信息，确认是要报废的工装，避免误操作造成损失。
+            </template>
+          </el-alert>
+        </div>
+      </div>
+      <el-form ref="scrapFormRef" :model="scrapForm" :rules="scrapRules" label-width="100px" :disabled="scrapSummaryLoading || !scrapSummary">
         <el-form-item label="工装编号">
           <el-input :model-value="currentItem?.toolingCode" disabled />
         </el-form-item>
         <el-form-item label="报废原因" prop="scrapReason">
-          <el-input v-model="scrapForm.scrapReason" type="textarea" :rows="3" placeholder="请输入报废原因" />
+          <el-select v-model="scrapForm.scrapReason" placeholder="请选择报废原因" style="width: 100%" filterable>
+            <el-option
+              v-for="reason in scrapReasonOptions"
+              :key="reason.reasonCode"
+              :label="reason.reasonName"
+              :value="reason.reasonName"
+            >
+              <div class="option-item">
+                <span class="option-name">{{ reason.reasonName }}</span>
+                <span v-if="reason.remark" class="option-desc">{{ reason.remark }}</span>
+              </div>
+            </el-option>
+          </el-select>
         </el-form-item>
         <el-form-item label="报废日期" prop="scrapDate">
           <el-date-picker
@@ -284,7 +357,7 @@
       </el-form>
       <template #footer>
         <el-button @click="scrapVisible = false">取消</el-button>
-        <el-button type="danger" :loading="submitting" @click="submitScrap">确认报废</el-button>
+        <el-button type="danger" :loading="submitting" :disabled="scrapSummaryLoading || !scrapSummary" @click="submitScrap">确认报废</el-button>
       </template>
     </el-dialog>
 
@@ -351,6 +424,8 @@ import {
   Warning,
   CircleCheck,
   InfoFilled,
+  Loading,
+  WarningFilled,
 } from '@element-plus/icons-vue'
 import {
   listAssets,
@@ -371,6 +446,8 @@ import {
   checkHighRiskTransfer,
   applyHighRiskTransfer,
   listPendingHighRiskTransferApprovals,
+  listScrapReasons,
+  getScrapSummary,
 } from '../api/tooling'
 import { batchCompressImages, validateImageFile } from '../utils/compress'
 import dayjs from 'dayjs'
@@ -1083,20 +1160,55 @@ const scrapForm = reactive({
   remark: '',
 })
 const scrapRules = {
-  scrapReason: [{ required: true, message: '请输入报废原因', trigger: 'blur' }],
+  scrapReason: [{ required: true, message: '请选择报废原因', trigger: 'change' }],
   scrapDate: [{ required: true, message: '请选择报废日期', trigger: 'change' }],
   operator: [{ required: true, message: '请输入操作人', trigger: 'blur' }],
   statusChangeRemark: [{ required: true, message: '请填写状态变更说明', trigger: 'blur' }],
 }
+const scrapReasonOptions = ref([])
+const scrapSummary = ref(null)
+const scrapSummaryLoading = ref(false)
 
-const handleScrap = (item) => {
+const fetchScrapReasonOptions = async () => {
+  try {
+    const res = await listScrapReasons('LOCATING_BLOCK', true)
+    scrapReasonOptions.value = res.data || []
+  } catch {
+    /* ignore */
+  }
+}
+
+const fetchScrapSummary = async (toolingCode) => {
+  scrapSummaryLoading.value = true
+  try {
+    const res = await getScrapSummary(toolingCode)
+    scrapSummary.value = res.data
+  } catch (e) {
+    scrapSummary.value = null
+    ElMessage.error(e?.message || '获取报废摘要失败')
+  } finally {
+    scrapSummaryLoading.value = false
+  }
+}
+
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return '-'
+  return dayjs(dateStr).format('YYYY-MM-DD HH:mm:ss')
+}
+
+const handleScrap = async (item) => {
   currentItem.value = item
   scrapForm.scrapReason = ''
   scrapForm.scrapDate = dayjs().format('YYYY-MM-DD')
   scrapForm.operator = ''
   scrapForm.statusChangeRemark = ''
   scrapForm.remark = ''
+  scrapSummary.value = null
   scrapVisible.value = true
+  await Promise.all([
+    fetchScrapReasonOptions(),
+    fetchScrapSummary(item.toolingCode),
+  ])
 }
 
 const buildDuplicateScrapMessage = (data) => {
@@ -1415,5 +1527,119 @@ onMounted(async () => {
 
 .high-risk-warning {
   margin-bottom: 16px;
+}
+
+.scrap-summary-section {
+  margin-bottom: 20px;
+  border: 1px solid #fde2e2;
+  border-radius: 8px;
+  background: #fef0f0;
+  overflow: hidden;
+}
+
+.summary-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: #fef0f0;
+  color: #f56c6c;
+  font-weight: 600;
+  font-size: 14px;
+  border-bottom: 1px solid #fde2e2;
+}
+
+.summary-content {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: #fff;
+}
+
+.summary-image {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #ebeef5;
+}
+
+.summary-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.summary-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #c0c4cc;
+  background: #f5f7fa;
+  font-size: 12px;
+}
+
+.summary-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.info-row.highlight {
+  background: #fef0f0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  margin-bottom: 2px;
+}
+
+.info-label {
+  color: #909399;
+  min-width: 110px;
+  flex-shrink: 0;
+}
+
+.info-value {
+  color: #303133;
+  flex: 1;
+}
+
+.info-value.code {
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-weight: 600;
+}
+
+.summary-warning {
+  padding: 0 16px 16px;
+  background: #fff;
+}
+
+.option-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.option-name {
+  font-size: 14px;
+  color: #303133;
+}
+
+.option-desc {
+  font-size: 12px;
+  color: #909399;
 }
 </style>

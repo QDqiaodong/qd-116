@@ -59,4 +59,9 @@ public class ScrapController {
     public Result<List<ScrapRecord>> listByTooling(@PathVariable String toolingCode) {
         return Result.ok(scrapService.listByTooling(toolingCode));
     }
+
+    @GetMapping("/summary/{toolingCode}")
+    public Result<ScrapSummaryVO> getScrapSummary(@PathVariable String toolingCode) {
+        return Result.ok(scrapService.getScrapSummary(toolingCode));
+    }
 }
