@@ -149,8 +149,13 @@
             type="date"
             placeholder="选择日期"
             value-format="YYYY-MM-DD"
+            :disabled-date="disabledEntryDate"
             style="width: 100%"
           />
+          <div class="entry-date-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>入库日期需在系统启用日期（{{ systemConfig.entryDateMin || '加载中' }}）至今天之间，超出范围将被拦截</span>
+          </div>
         </el-form-item>
         <el-form-item v-if="isEdit" label="状态" prop="status">
           <el-select v-model="form.status" placeholder="请选择状态" style="width: 100%">
@@ -293,6 +298,7 @@ import {
   updateAsset,
   deleteAsset,
   getStats,
+  getSystemConfig,
   uploadFile,
   transferTooling,
   scrapTooling,
@@ -342,6 +348,7 @@ const keyword = ref('')
 const filterStatus = ref('')
 const filterWorkstation = ref('')
 const stats = reactive({ inUse: 0, transferred: 0, scrapped: 0 })
+const systemConfig = reactive({ entryDateMin: '', today: '' })
 const brokenImageIds = reactive(new Set())
 
 const handleImageError = (item) => {
@@ -380,6 +387,42 @@ const fetchStats = async () => {
   } catch {
     /* ignore */
   }
+}
+
+const fetchSystemConfig = async () => {
+  try {
+    const res = await getSystemConfig()
+    const d = res.data || {}
+    systemConfig.entryDateMin = d.entryDateMin || ''
+    systemConfig.today = d.today || ''
+  } catch {
+    /* ignore */
+  }
+}
+
+const disabledEntryDate = (date) => {
+  if (!date) return false
+  const d = dayjs(date)
+  if (d.isAfter(dayjs(), 'day')) return true
+  if (systemConfig.entryDateMin && d.isBefore(dayjs(systemConfig.entryDateMin), 'day')) return true
+  return false
+}
+
+const validateEntryDate = (rule, value, callback) => {
+  if (!value) {
+    callback(new Error('请选择入库日期'))
+    return
+  }
+  const d = dayjs(value)
+  if (d.isAfter(dayjs(), 'day')) {
+    callback(new Error('入库日期不能晚于今天，请重新选择'))
+    return
+  }
+  if (systemConfig.entryDateMin && d.isBefore(dayjs(systemConfig.entryDateMin), 'day')) {
+    callback(new Error(`入库日期不能早于系统启用日期（${systemConfig.entryDateMin}），请重新选择`))
+    return
+  }
+  callback()
 }
 
 const specMapByCategory = ref({})
@@ -499,7 +542,7 @@ const rules = {
   toolingCode: [{ required: true, message: '请输入工装编号', trigger: 'blur' }],
   productName: [{ required: true, message: '请输入适配产品', trigger: 'blur' }],
   workstation: [{ required: true, message: '请选择存放工位', trigger: 'change' }],
-  entryDate: [{ required: true, message: '请选择入库日期', trigger: 'change' }],
+  entryDate: [{ required: true, validator: validateEntryDate, trigger: 'change' }],
   statusChangeRemark: [{ validator: validateStatusChangeRemark, trigger: 'blur' }],
 }
 
@@ -933,6 +976,7 @@ const submitScrap = async () => {
 }
 
 onMounted(async () => {
+  await fetchSystemConfig()
   fetchList()
   fetchStats()
   fetchSpecTemplates()
@@ -1174,6 +1218,20 @@ onMounted(async () => {
 }
 
 .code-format-hint .el-icon {
+  font-size: 14px;
+  color: #409eff;
+}
+
+.entry-date-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.entry-date-hint .el-icon {
   font-size: 14px;
   color: #409eff;
 }

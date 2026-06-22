@@ -32,6 +32,10 @@ export function getStats() {
   return request.get('/tooling/stats')
 }
 
+export function getSystemConfig() {
+  return request.get('/system/config')
+}
+
 export function transferTooling(params) {
   return request.post('/transfer', null, { params })
 }

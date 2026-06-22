@@ -27,3 +27,6 @@ spring:
 
 file:
   upload-dir: ./uploads/tooling-images
+
+system:
+  enable-date: 2024-01-01

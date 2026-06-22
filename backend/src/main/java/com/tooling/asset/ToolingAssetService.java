@@ -2,6 +2,7 @@ package com.tooling.asset;
 
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,9 @@ import java.util.stream.Collectors;
 public class ToolingAssetService {
 
     private static final int ENTRY_DATE_TOLERANCE_DAYS = 7;
+
+    @Value("${system.enable-date:2024-01-01}")
+    private String systemEnableDate;
 
     private final ToolingAssetRepository toolingAssetRepository;
     private final TransferRecordRepository transferRecordRepository;
@@ -90,7 +94,22 @@ public class ToolingAssetService {
         return sb.toString().trim();
     }
 
+    private void validateEntryDate(LocalDate entryDate) {
+        if (entryDate == null) {
+            throw new BusinessException("入库日期不能为空");
+        }
+        LocalDate today = LocalDate.now();
+        if (entryDate.isAfter(today)) {
+            throw new BusinessException("入库日期不能晚于今天（" + today + "），请重新选择");
+        }
+        LocalDate enableDate = LocalDate.parse(systemEnableDate);
+        if (entryDate.isBefore(enableDate)) {
+            throw new BusinessException("入库日期不能早于系统启用日期（" + enableDate + "），请重新选择");
+        }
+    }
+
     public ToolingAsset createAsset(ToolingAsset asset, boolean forceCreate) {
+        validateEntryDate(asset.getEntryDate());
         if (toolingAssetRepository.findByToolingCode(asset.getToolingCode()).isPresent()) {
             throw new RuntimeException("工装编号已存在: " + asset.getToolingCode());
         }
@@ -107,6 +126,7 @@ public class ToolingAssetService {
     }
 
     public ToolingAsset updateAsset(Long id, ToolingAsset asset, boolean forceUpdate, String statusChangeRemark) {
+        validateEntryDate(asset.getEntryDate());
         ToolingAsset existing = toolingAssetRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("工装不存在: " + id));
 
