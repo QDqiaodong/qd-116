@@ -232,7 +232,9 @@
           <el-input :model-value="actionRow?.actualFoundWorkstation" disabled />
         </el-form-item>
         <el-form-item label="修正为工位" prop="correctedWorkstation">
-          <el-input v-model="correctForm.correctedWorkstation" placeholder="请输入正确的工位，如：注塑机03" />
+          <el-select v-model="correctForm.correctedWorkstation" placeholder="请选择正确的工位" style="width: 100%">
+            <el-option v-for="ws in workstationOptions" :key="ws" :label="ws" :value="ws" />
+          </el-select>
         </el-form-item>
         <el-form-item label="处理人" prop="handler">
           <el-input v-model="correctForm.handler" placeholder="请输入处理人姓名" />
@@ -296,6 +298,7 @@ import {
   handleCorrectWorkstation,
   handleScrap,
   getLatestCheck,
+  listWorkstationNames,
 } from '../api/tooling'
 import dayjs from 'dayjs'
 
@@ -306,6 +309,7 @@ const activeTab = ref('pending')
 const activeFilter = ref('')
 const counts = reactive({ total: 0, missing: 0, misplaced: 0, extra: 0 })
 const latestCheckMonth = ref('')
+const workstationOptions = ref([])
 
 const activeFilterLabel = computed(() => {
   const map = { '': '全部', MISSING: '盘亏', MISPLACED: '错位', EXTRA: '盘盈' }
@@ -331,6 +335,16 @@ const onTabChange = () => {
 const refresh = () => {
   fetchCounts()
   fetchData()
+  fetchWorkstationOptions()
+}
+
+const fetchWorkstationOptions = async () => {
+  try {
+    const res = await listWorkstationNames()
+    workstationOptions.value = res.data || []
+  } catch {
+    /* ignore */
+  }
 }
 
 const fetchCounts = async () => {

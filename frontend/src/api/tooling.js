@@ -251,3 +251,11 @@ export function getInventoryBatchSnapshotCount(batchId) {
 export function getInventoryBatchStatus(batchMonth) {
   return request.get(`/inventory-batch/status/${batchMonth}`)
 }
+
+export function listWorkstationNames() {
+  return request.get('/workstation-capacity/names')
+}
+
+export function getLatestInventoryBatchSummary() {
+  return request.get('/inventory-batch/latest/summary')
+}

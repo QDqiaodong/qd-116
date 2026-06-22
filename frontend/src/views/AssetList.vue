@@ -307,6 +307,7 @@ import {
   validateLocatorBlockCode,
   getSpecTemplate,
   listSpecCategories,
+  listWorkstationNames,
 } from '../api/tooling'
 import { batchCompressImages, validateImageFile } from '../utils/compress'
 import dayjs from 'dayjs'
@@ -314,11 +315,7 @@ import dayjs from 'dayjs'
 const router = useRouter()
 const route = useRoute()
 
-const workstationOptions = [
-  '注塑机01', '注塑机02', '注塑机03', '注塑机04',
-  '注塑机05', '注塑机06', '注塑机07', '注塑机08',
-  '模具库A区', '模具库B区', '待检区', '维修区',
-]
+const workstationOptions = ref([])
 
 const currentYear = new Date().getFullYear()
 
@@ -494,6 +491,15 @@ const fetchSpecTemplates = async () => {
       })
     )
     specMapByCategory.value = map
+  } catch {
+    /* ignore */
+  }
+}
+
+const fetchWorkstationOptions = async () => {
+  try {
+    const res = await listWorkstationNames()
+    workstationOptions.value = res.data || []
   } catch {
     /* ignore */
   }
@@ -977,6 +983,7 @@ const submitScrap = async () => {
 
 onMounted(async () => {
   await fetchSystemConfig()
+  await fetchWorkstationOptions()
   fetchList()
   fetchStats()
   fetchSpecTemplates()

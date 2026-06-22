@@ -16,6 +16,7 @@ public class InventoryBatchService {
     private final InventoryBatchRepository inventoryBatchRepository;
     private final InventoryBatchSnapshotRepository inventoryBatchSnapshotRepository;
     private final ToolingAssetRepository toolingAssetRepository;
+    private final ToolingInventoryDiffRepository toolingInventoryDiffRepository;
 
     private String regionOf(String workstation) {
         if (workstation == null || workstation.isEmpty()) return "其他";
@@ -198,6 +199,58 @@ public class InventoryBatchService {
     @Transactional(readOnly = true)
     public Optional<InventoryBatch> getLatestBatch() {
         return inventoryBatchRepository.findTopByOrderByBatchMonthDescCreateTimeDesc();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<LatestInventoryBatchVO> getLatestBatchSummary() {
+        Optional<InventoryBatch> latestOpt = getLatestBatch();
+        if (latestOpt.isEmpty()) {
+            return Optional.empty();
+        }
+
+        InventoryBatch batch = latestOpt.get();
+        String batchMonth = batch.getBatchMonth();
+
+        List<ToolingInventoryDiff> diffs = toolingInventoryDiffRepository.findByCheckMonth(batchMonth);
+
+        int totalDiffCount = diffs.size();
+        int pendingCount = 0;
+        int missingCount = 0;
+        int misplacedCount = 0;
+        int extraCount = 0;
+        int processedCount = 0;
+
+        for (ToolingInventoryDiff diff : diffs) {
+            if ("PENDING".equals(diff.getHandleStatus())) {
+                pendingCount++;
+            } else if ("PROCESSED".equals(diff.getHandleStatus())) {
+                processedCount++;
+            }
+
+            String diffType = diff.getDiffType();
+            if ("MISSING".equals(diffType)) {
+                missingCount++;
+            } else if ("MISPLACED".equals(diffType)) {
+                misplacedCount++;
+            } else if ("EXTRA".equals(diffType)) {
+                extraCount++;
+            }
+        }
+
+        LatestInventoryBatchVO vo = LatestInventoryBatchVO.builder()
+                .batchMonth(batch.getBatchMonth())
+                .batchName(batch.getBatchName())
+                .status(batch.getStatus())
+                .statusDescription(batch.getStatus() != null ? batch.getStatus().getDescription() : null)
+                .totalDiffCount(totalDiffCount)
+                .pendingDiffCount(pendingCount)
+                .missingCount(missingCount)
+                .misplacedCount(misplacedCount)
+                .extraCount(extraCount)
+                .processedCount(processedCount)
+                .build();
+
+        return Optional.of(vo);
     }
 
     @Transactional(readOnly = true)

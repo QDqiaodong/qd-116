@@ -215,7 +215,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh,
@@ -232,9 +232,11 @@ import {
   markMissing,
   markMisplaced,
   getLatestCheck,
+  listWorkstationNames,
 } from '../api/tooling'
 
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
 const markLoading = ref(false)
@@ -242,15 +244,10 @@ const assets = ref([])
 const diffs = ref([])
 const activeMonth = ref('')
 const checker = ref('')
-
-const WS_ORDER = [
-  '注塑机01', '注塑机02', '注塑机03', '注塑机04',
-  '注塑机05', '注塑机06', '注塑机07', '注塑机08',
-  '模具库A区', '模具库B区', '待检区', '维修区',
-]
+const workstationOptions = ref([])
 
 const wsIndexOf = (ws) => {
-  const idx = WS_ORDER.indexOf(ws)
+  const idx = workstationOptions.value.indexOf(ws)
   return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
 }
 
@@ -410,6 +407,15 @@ const fetchAssets = async () => {
   }
 }
 
+const fetchWorkstationOptions = async () => {
+  try {
+    const res = await listWorkstationNames()
+    workstationOptions.value = res.data || []
+  } catch {
+    /* ignore */
+  }
+}
+
 const fetchDiffs = async () => {
   if (!activeMonth.value) {
     diffs.value = []
@@ -442,6 +448,11 @@ const fetchLatest = async () => {
 
 const initDefaultMonth = () => {
   if (!activeMonth.value) {
+    const queryMonth = route.query.month
+    if (queryMonth && typeof queryMonth === 'string') {
+      activeMonth.value = queryMonth
+      return
+    }
     const now = new Date()
     const m = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     activeMonth.value = m
@@ -567,6 +578,7 @@ onMounted(async () => {
   initDefaultMonth()
   await fetchLatest()
   initDefaultMonth()
+  await fetchWorkstationOptions()
   await refreshAll()
   activeWorkstations.value = workstationGroups.value.map((g) => g.workstation)
 })

@@ -6,6 +6,21 @@
         <span class="title">注塑车间 · 定位块工装资产登记系统</span>
       </div>
       <div class="header-right">
+        <div class="latest-batch-entry" v-if="latestBatch" @click="goToLatestBatch">
+          <el-icon class="batch-icon"><DocumentChecked /></el-icon>
+          <div class="batch-info">
+            <div class="batch-month">{{ latestBatch.batchMonth }} 清点</div>
+            <div class="batch-meta">
+              <el-tag size="small" :type="batchStatusTagType(latestBatch.status)" effect="dark">
+                {{ latestBatch.statusDescription }}
+              </el-tag>
+              <span class="batch-diff" v-if="latestBatch.pendingDiffCount > 0">
+                <el-icon><Warning /></el-icon>
+                {{ latestBatch.pendingDiffCount }} 项待处理
+              </span>
+            </div>
+          </div>
+        </div>
         <el-tag type="info" size="small">单车间独立数据</el-tag>
       </div>
     </el-header>
@@ -69,12 +84,47 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { Box, Switch, Checked, Delete, SetUp, Clock, Grid, Position, Operation, DocumentChecked, Picture } from '@element-plus/icons-vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Box, Switch, Checked, Delete, SetUp, Clock, Grid, Position, Operation, DocumentChecked, Picture, Warning } from '@element-plus/icons-vue'
+import { getLatestInventoryBatchSummary } from '../api/tooling'
 
 const route = useRoute()
+const router = useRouter()
 const activeMenu = computed(() => route.path)
+
+const latestBatch = ref(null)
+
+const batchStatusTagType = (status) => {
+  const map = {
+    DRAFT: 'info',
+    FROZEN: 'warning',
+    CLOSED: 'success',
+  }
+  return map[status] || 'info'
+}
+
+const fetchLatestBatch = async () => {
+  try {
+    const res = await getLatestInventoryBatchSummary()
+    latestBatch.value = res.data || null
+  } catch {
+    latestBatch.value = null
+  }
+}
+
+const goToLatestBatch = () => {
+  if (!latestBatch.value) return
+  if (latestBatch.value.pendingDiffCount > 0) {
+    router.push('/inventory-diff-closure')
+  } else {
+    router.push({ path: '/inventory-workbench', query: { month: latestBatch.value.batchMonth } })
+  }
+}
+
+onMounted(() => {
+  fetchLatestBatch()
+})
 </script>
 
 <style scoped>
@@ -110,5 +160,57 @@ const activeMenu = computed(() => route.path)
   background: #f0f2f5;
   padding: 20px;
   overflow-y: auto;
+}
+
+.latest-batch-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.latest-batch-entry:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(64, 158, 255, 0.6);
+}
+
+.batch-icon {
+  color: #409eff;
+  font-size: 20px;
+}
+
+.batch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.batch-month {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.batch-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.batch-diff {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #e6a23c;
+}
+
+.batch-diff .el-icon {
+  font-size: 12px;
 }
 </style>

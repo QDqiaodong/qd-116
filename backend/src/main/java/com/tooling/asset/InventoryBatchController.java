@@ -87,6 +87,11 @@ public class InventoryBatchController {
         return Result.ok(inventoryBatchService.getLatestBatch().orElse(null));
     }
 
+    @GetMapping("/latest/summary")
+    public Result<LatestInventoryBatchVO> latestSummary() {
+        return Result.ok(inventoryBatchService.getLatestBatchSummary().orElse(null));
+    }
+
     @GetMapping("/{batchId}/snapshots")
     public Result<List<InventoryBatchSnapshot>> listSnapshots(@PathVariable Long batchId) {
         return Result.ok(inventoryBatchService.listSnapshots(batchId));

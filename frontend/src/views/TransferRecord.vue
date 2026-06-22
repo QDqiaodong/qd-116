@@ -149,13 +149,9 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Plus, Clock, User, Calendar, Timer, Position, Right } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import { listTransfers, getTransferHistory, transferTooling, getWorkstationStays } from '../api/tooling'
+import { listTransfers, getTransferHistory, transferTooling, getWorkstationStays, listWorkstationNames } from '../api/tooling'
 
-const workstationOptions = [
-  '注塑机01', '注塑机02', '注塑机03', '注塑机04',
-  '注塑机05', '注塑机06', '注塑机07', '注塑机08',
-  '模具库A区', '模具库B区', '待检区', '维修区',
-]
+const workstationOptions = ref([])
 
 const loading = ref(false)
 const tableData = ref([])
@@ -170,6 +166,15 @@ const fetchList = async () => {
     ElMessage.error(e?.message || '获取移位记录失败')
   } finally {
     loading.value = false
+  }
+}
+
+const fetchWorkstationOptions = async () => {
+  try {
+    const res = await listWorkstationNames()
+    workstationOptions.value = res.data || []
+  } catch {
+    /* ignore */
   }
 }
 
@@ -265,7 +270,8 @@ const viewHistory = async (toolingCode) => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchWorkstationOptions()
   fetchList()
 })
 </script>

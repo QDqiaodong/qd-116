@@ -79,6 +79,14 @@ public class WorkstationCapacityService {
     }
 
     @Transactional(readOnly = true)
+    public List<String> listWorkstationNames() {
+        return workstationCapacityRepository.findAll().stream()
+                .map(WorkstationCapacity::getWorkstation)
+                .sorted()
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public CapacityCheckResult checkCapacity(String workstation) {
         if (workstation == null || workstation.isEmpty()) {
             return CapacityCheckResult.builder()

@@ -56,4 +56,9 @@ public class WorkstationCapacityController {
     public Result<CapacityCheckResult> checkCapacity(@RequestParam String workstation) {
         return Result.ok(workstationCapacityService.checkCapacity(workstation));
     }
+
+    @GetMapping("/names")
+    public Result<List<String>> listWorkstationNames() {
+        return Result.ok(workstationCapacityService.listWorkstationNames());
+    }
 }
