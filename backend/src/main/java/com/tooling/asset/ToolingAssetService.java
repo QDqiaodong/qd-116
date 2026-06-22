@@ -31,6 +31,7 @@ public class ToolingAssetService {
     private final ScrapRecordRepository scrapRecordRepository;
     private final WorkstationCapacityService workstationCapacityService;
     private final HighRiskTransferApprovalRepository highRiskTransferApprovalRepository;
+    private final ToolingCodeService toolingCodeService;
 
     public DuplicateCheckResult checkDuplicate(ToolingAsset asset) {
         boolean codeDuplicate = false;
@@ -109,8 +110,19 @@ public class ToolingAssetService {
         }
     }
 
+    private void validateToolingCode(String toolingCode, Long excludeId) {
+        if (toolingCode == null || toolingCode.trim().isEmpty()) {
+            throw new BusinessException("工装编号不能为空");
+        }
+        CodeValidationResult validation = toolingCodeService.validateLocatorBlockCode(toolingCode.trim(), excludeId);
+        if (!validation.isValid()) {
+            throw new BusinessException(validation.getMessage());
+        }
+    }
+
     public ToolingAsset createAsset(ToolingAsset asset, boolean forceCreate) {
         validateEntryDate(asset.getEntryDate());
+        validateToolingCode(asset.getToolingCode(), null);
         if (toolingAssetRepository.findByToolingCode(asset.getToolingCode()).isPresent()) {
             throw new RuntimeException("工装编号已存在: " + asset.getToolingCode());
         }
@@ -133,6 +145,7 @@ public class ToolingAssetService {
 
         boolean codeChanged = !existing.getToolingCode().equals(asset.getToolingCode());
         if (codeChanged) {
+            validateToolingCode(asset.getToolingCode(), id);
             if (toolingAssetRepository.findByToolingCode(asset.getToolingCode()).isPresent()) {
                 throw new RuntimeException("工装编号已存在: " + asset.getToolingCode());
             }

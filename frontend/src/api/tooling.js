@@ -263,3 +263,45 @@ export function listWorkstationNames() {
 export function getLatestInventoryBatchSummary() {
   return request.get('/inventory-batch/latest/summary')
 }
+
+export function checkHighRiskTransfer(fromWorkstation, toWorkstation) {
+  return request.post('/high-risk-transfer-approval/check', null, {
+    params: { fromWorkstation, toWorkstation },
+  })
+}
+
+export function applyHighRiskTransfer(params) {
+  return request.post('/high-risk-transfer-approval/apply', null, { params })
+}
+
+export function approveHighRiskTransfer(id, params) {
+  return request.put(`/high-risk-transfer-approval/${id}/approve`, null, { params })
+}
+
+export function executeHighRiskTransfer(id, executor) {
+  return request.post(`/high-risk-transfer-approval/${id}/execute`, null, {
+    params: { executor },
+  })
+}
+
+export function cancelHighRiskTransfer(id, canceller) {
+  return request.put(`/high-risk-transfer-approval/${id}/cancel`, null, {
+    params: { canceller },
+  })
+}
+
+export function getHighRiskTransferApproval(id) {
+  return request.get(`/high-risk-transfer-approval/${id}`)
+}
+
+export function listHighRiskTransferApprovals(params) {
+  return request.get('/high-risk-transfer-approval/search', { params })
+}
+
+export function listAllHighRiskTransferApprovals() {
+  return request.get('/high-risk-transfer-approval/list')
+}
+
+export function listPendingHighRiskTransferApprovals() {
+  return request.get('/high-risk-transfer-approval/pending')
+}

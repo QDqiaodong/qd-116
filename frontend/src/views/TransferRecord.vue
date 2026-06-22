@@ -31,18 +31,34 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="transferDialogVisible" title="移位登记" width="520px" destroy-on-close>
-      <el-form ref="transferFormRef" :model="transferForm" :rules="transferRules" label-width="100px">
+    <el-dialog v-model="transferDialogVisible" title="移位登记" width="560px" destroy-on-close>
+      <div v-if="isHighRiskTransfer" class="high-risk-warning">
+        <el-alert
+          type="warning"
+          :closable="false"
+          show-icon
+          title="⚠️ 高风险移位提醒"
+        >
+          <template #default>
+            <div>该移位属于高风险移位（从重点区域流向敏感区域），需先走审批流程，不能直接移位。</div>
+            <div style="margin-top:8px;">
+              <el-button size="small" type="warning" @click="openHighRiskApprovalDialog">发起审批申请</el-button>
+              <el-button size="small" @click="transferDialogVisible = false">取消移位</el-button>
+            </div>
+          </template>
+        </el-alert>
+      </div>
+      <el-form ref="transferFormRef" :model="transferForm" :rules="transferRules" label-width="100px" :disabled="isHighRiskTransfer">
         <el-form-item label="工装编号" prop="toolingCode">
-          <el-input v-model="transferForm.toolingCode" placeholder="请输入工装编号" />
+          <el-input v-model="transferForm.toolingCode" placeholder="请输入工装编号" @blur="checkHighRiskOnBlur" />
         </el-form-item>
         <el-form-item label="原工位" prop="fromWorkstation">
-          <el-select v-model="transferForm.fromWorkstation" placeholder="请选择原工位" style="width: 100%">
+          <el-select v-model="transferForm.fromWorkstation" placeholder="请选择原工位" style="width: 100%" @change="checkHighRiskOnChange">
             <el-option v-for="ws in workstationOptions" :key="ws" :label="ws" :value="ws" />
           </el-select>
         </el-form-item>
         <el-form-item label="新工位" prop="toWorkstation">
-          <el-select v-model="transferForm.toWorkstation" placeholder="请选择新工位" style="width: 100%">
+          <el-select v-model="transferForm.toWorkstation" placeholder="请选择新工位" style="width: 100%" @change="checkHighRiskOnChange">
             <el-option v-for="ws in workstationOptions" :key="ws" :label="ws" :value="ws" />
           </el-select>
         </el-form-item>
@@ -58,7 +74,51 @@
       </el-form>
       <template #footer>
         <el-button @click="transferDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitTransfer">提交</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="isHighRiskTransfer" @click="submitTransfer">提交</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="highRiskApprovalVisible" title="高风险移位审批申请" width="560px" destroy-on-close>
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom:16px;"
+        title="请完成以下信息提交审批"
+      />
+      <el-form ref="highRiskApprovalFormRef" :model="highRiskApprovalForm" :rules="highRiskApprovalRules" label-width="100px">
+        <el-form-item label="工装编号">
+          <el-input :model-value="transferForm.toolingCode" disabled />
+        </el-form-item>
+        <el-form-item label="源工位">
+          <el-input :model-value="transferForm.fromWorkstation" disabled />
+        </el-form-item>
+        <el-form-item label="目标工位">
+          <el-input :model-value="transferForm.toWorkstation" disabled />
+        </el-form-item>
+        <el-form-item label="申请人" prop="applicant">
+          <el-input v-model="highRiskApprovalForm.applicant" placeholder="请输入申请人姓名" />
+        </el-form-item>
+        <el-form-item label="申请原因" prop="applyReason">
+          <el-input
+            v-model="highRiskApprovalForm.applyReason"
+            type="textarea"
+            :rows="3"
+            placeholder="请详细说明高风险移位的原因，必填"
+          />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input
+            v-model="highRiskApprovalForm.remark"
+            type="textarea"
+            :rows="2"
+            placeholder="请输入补充备注（可选）"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="highRiskApprovalVisible = false">取消</el-button>
+        <el-button type="warning" :loading="submittingApproval" @click="submitHighRiskApproval">提交审批申请</el-button>
       </template>
     </el-dialog>
 
@@ -149,7 +209,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Plus, Clock, User, Calendar, Timer, Position, Right } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import { listTransfers, getTransferHistory, transferTooling, getWorkstationStays, listWorkstationNames } from '../api/tooling'
+import { listTransfers, getTransferHistory, transferTooling, getWorkstationStays, listWorkstationNames, checkHighRiskTransfer, applyHighRiskTransfer } from '../api/tooling'
 
 const workstationOptions = ref([])
 
@@ -181,6 +241,7 @@ const fetchWorkstationOptions = async () => {
 const transferDialogVisible = ref(false)
 const transferFormRef = ref(null)
 const submitting = ref(false)
+const isHighRiskTransfer = ref(false)
 const transferForm = reactive({
   toolingCode: '',
   fromWorkstation: '',
@@ -189,6 +250,72 @@ const transferForm = reactive({
   statusChangeRemark: '',
   remark: '',
 })
+
+const highRiskApprovalVisible = ref(false)
+const highRiskApprovalFormRef = ref(null)
+const submittingApproval = ref(false)
+const highRiskApprovalForm = reactive({
+  applicant: '',
+  applyReason: '',
+  remark: '',
+})
+const highRiskApprovalRules = {
+  applicant: [{ required: true, message: '请输入申请人', trigger: 'blur' }],
+  applyReason: [{ required: true, message: '请填写申请原因', trigger: 'blur' }],
+}
+
+const checkHighRisk = async () => {
+  if (!transferForm.fromWorkstation || !transferForm.toWorkstation) {
+    isHighRiskTransfer.value = false
+    return
+  }
+  try {
+    const res = await checkHighRiskTransfer(transferForm.fromWorkstation, transferForm.toWorkstation)
+    isHighRiskTransfer.value = !!res.data
+  } catch {
+    isHighRiskTransfer.value = false
+  }
+}
+
+const checkHighRiskOnChange = () => {
+  checkHighRisk()
+}
+
+const checkHighRiskOnBlur = () => {
+  // 工装编号失去焦点时，如果已有工位信息也检查
+  checkHighRisk()
+}
+
+const openHighRiskApprovalDialog = () => {
+  highRiskApprovalForm.applicant = ''
+  highRiskApprovalForm.applyReason = ''
+  highRiskApprovalForm.remark = ''
+  highRiskApprovalVisible.value = true
+}
+
+const submitHighRiskApproval = async () => {
+  const valid = await highRiskApprovalFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  submittingApproval.value = true
+  try {
+    await applyHighRiskTransfer({
+      toolingCode: transferForm.toolingCode,
+      fromWorkstation: transferForm.fromWorkstation,
+      toWorkstation: transferForm.toWorkstation,
+      applicant: highRiskApprovalForm.applicant,
+      applyReason: highRiskApprovalForm.applyReason,
+      remark: highRiskApprovalForm.remark,
+    })
+    ElMessage.success('高风险移位审批申请已提交，请等待审批通过后再执行移位')
+    highRiskApprovalVisible.value = false
+    transferDialogVisible.value = false
+    fetchList()
+  } catch (e) {
+    ElMessage.error(e?.message || '提交审批申请失败')
+  } finally {
+    submittingApproval.value = false
+  }
+}
 
 const validateToWorkstation = (rule, value, callback) => {
   if (!value) {
@@ -217,6 +344,7 @@ const openTransferDialog = () => {
     statusChangeRemark: '',
     remark: '',
   })
+  isHighRiskTransfer.value = false
   transferDialogVisible.value = true
 }
 
@@ -540,5 +668,9 @@ onMounted(async () => {
 .stay-item.is-current .meta-tag {
   background: #e1f3d8;
   color: #67c23a;
+}
+
+.high-risk-warning {
+  margin-bottom: 16px;
 }
 </style>

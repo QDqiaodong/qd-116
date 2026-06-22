@@ -18,6 +18,7 @@ public class ToolingCodeService {
     private static final Pattern CODE_REGEX = Pattern.compile(CODE_PATTERN);
     private static final int SEQUENCE_DIGITS = 3;
     private static final int INITIAL_SEQUENCE = 1;
+    private static final int MAX_SEQUENCE = 999;
 
     private final ToolingAssetRepository toolingAssetRepository;
 
@@ -35,6 +36,10 @@ public class ToolingCodeService {
             } catch (NumberFormatException e) {
                 nextSequence = INITIAL_SEQUENCE;
             }
+        }
+
+        if (nextSequence > MAX_SEQUENCE) {
+            throw new BusinessException("本年度工装编号流水号已达上限（" + MAX_SEQUENCE + "），无法继续生成新编号，请联系管理员处理");
         }
 
         return prefix + String.format("%0" + SEQUENCE_DIGITS + "d", nextSequence);
@@ -58,14 +63,16 @@ public class ToolingCodeService {
         boolean formatValid = CODE_REGEX.matcher(trimmedCode).matches();
 
         if (!formatValid) {
-            String suggestedCode = generateNextLocatorBlockCode();
-            return CodeValidationResult.builder()
+            String suggestedCode = safeGenerateNextCode();
+            CodeValidationResult.CodeValidationResultBuilder builder = CodeValidationResult.builder()
                     .valid(false)
                     .formatValid(false)
                     .exists(false)
-                    .message("编号格式不正确，定位块编号格式应为 TL-YYYY-XXX（如 TL-2024-001）")
-                    .suggestedCode(suggestedCode)
-                    .build();
+                    .message("编号格式不正确，定位块编号格式应为 TL-YYYY-XXX（如 TL-2024-001）");
+            if (suggestedCode != null) {
+                builder.suggestedCode(suggestedCode);
+            }
+            return builder.build();
         }
 
         Matcher matcher = CODE_REGEX.matcher(trimmedCode);
@@ -81,6 +88,25 @@ public class ToolingCodeService {
                         .message("年份不合理，应在 2000 年至 " + (currentYear + 1) + " 年之间")
                         .build();
             }
+
+            String seqStr = trimmedCode.substring(8);
+            try {
+                int seq = Integer.parseInt(seqStr);
+                if (seq < INITIAL_SEQUENCE || seq > MAX_SEQUENCE) {
+                    String suggestedCode = safeGenerateNextCode();
+                    CodeValidationResult.CodeValidationResultBuilder builder = CodeValidationResult.builder()
+                            .valid(false)
+                            .formatValid(false)
+                            .exists(false)
+                            .message("流水号超出范围，有效范围为 001 至 " + String.format("%0" + SEQUENCE_DIGITS + "d", MAX_SEQUENCE));
+                    if (suggestedCode != null) {
+                        builder.suggestedCode(suggestedCode);
+                    }
+                    return builder.build();
+                }
+            } catch (NumberFormatException e) {
+                // ignore, regex already ensured digits
+            }
         }
 
         boolean exists;
@@ -93,14 +119,16 @@ public class ToolingCodeService {
         }
 
         if (exists) {
-            String suggestedCode = generateNextLocatorBlockCode();
-            return CodeValidationResult.builder()
+            String suggestedCode = safeGenerateNextCode();
+            CodeValidationResult.CodeValidationResultBuilder builder = CodeValidationResult.builder()
                     .valid(false)
                     .formatValid(true)
                     .exists(true)
-                    .message("该编号已存在，请更换编号")
-                    .suggestedCode(suggestedCode)
-                    .build();
+                    .message("该编号已存在，请更换编号");
+            if (suggestedCode != null) {
+                builder.suggestedCode(suggestedCode);
+            }
+            return builder.build();
         }
 
         return CodeValidationResult.builder()
@@ -109,6 +137,14 @@ public class ToolingCodeService {
                 .exists(false)
                 .message("编号校验通过")
                 .build();
+    }
+
+    private String safeGenerateNextCode() {
+        try {
+            return generateNextLocatorBlockCode();
+        } catch (BusinessException e) {
+            return null;
+        }
     }
 
     public boolean isLocatorBlockCode(String toolingCode) {
