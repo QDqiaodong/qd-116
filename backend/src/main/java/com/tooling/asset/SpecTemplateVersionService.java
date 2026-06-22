@@ -355,6 +355,9 @@ public class SpecTemplateVersionService {
             return Set.of();
         }
         return keys.stream()
+                .filter(key -> !key.startsWith(VERSION_KEY_PREFIX + ":")
+                        && !key.startsWith(VERSIONS_INDEX_PREFIX + ":")
+                        && !key.startsWith(CURRENT_VERSION_PREFIX + ":"))
                 .map(key -> key.substring(KEY_PREFIX.length() + 1))
                 .collect(Collectors.toSet());
     }

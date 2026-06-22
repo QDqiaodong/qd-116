@@ -28,19 +28,28 @@ public class TraceService {
 
         List<TraceEvent> events = new ArrayList<>();
 
+        List<TransferRecord> transfers = transferRecordRepository.findByToolingCodeOrderByTransferTimeDesc(toolingCode);
+
+        String originalWorkstation = asset.getWorkstation();
+        if (!transfers.isEmpty()) {
+            TransferRecord earliest = transfers.get(transfers.size() - 1);
+            if (earliest.getFromWorkstation() != null) {
+                originalWorkstation = earliest.getFromWorkstation();
+            }
+        }
+
         events.add(TraceEvent.builder()
                 .eventType("CREATE")
                 .eventLabel("建档入库")
                 .eventTime(asset.getCreateTime() != null ? asset.getCreateTime() :
                         (asset.getEntryDate() != null ? LocalDateTime.of(asset.getEntryDate(), LocalTime.MIN) : null))
-                .workstation(asset.getWorkstation())
+                .workstation(originalWorkstation)
                 .operator(null)
                 .remark(asset.getRemark())
                 .statusChangeRemark(asset.getLastStatusChangeRemark())
                 .detail("建档入库，适配产品：" + asset.getProductName())
                 .build());
 
-        List<TransferRecord> transfers = transferRecordRepository.findByToolingCodeOrderByTransferTimeDesc(toolingCode);
         for (TransferRecord t : transfers) {
             events.add(TraceEvent.builder()
                     .eventType("TRANSFER")

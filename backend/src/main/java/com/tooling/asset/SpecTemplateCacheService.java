@@ -160,12 +160,19 @@ public class SpecTemplateCacheService {
         redisTemplate.delete(key);
     }
 
+    private static final String VERSION_KEY_PREFIX = "tooling:spec:template:version";
+    private static final String VERSIONS_INDEX_PREFIX = "tooling:spec:template:versions";
+    private static final String CURRENT_VERSION_PREFIX = "tooling:spec:template:current-version";
+
     public Set<String> listCategories() {
         Set<String> keys = redisTemplate.keys(KEY_PREFIX + ":*");
         if (keys == null) {
             return Set.of();
         }
         return keys.stream()
+                .filter(key -> !key.startsWith(VERSION_KEY_PREFIX + ":")
+                        && !key.startsWith(VERSIONS_INDEX_PREFIX + ":")
+                        && !key.startsWith(CURRENT_VERSION_PREFIX + ":"))
                 .map(key -> key.substring(KEY_PREFIX.length() + 1))
                 .collect(java.util.stream.Collectors.toSet());
     }

@@ -119,6 +119,13 @@ public class TransferService {
         List<WorkstationStayVO> stays = new ArrayList<>();
 
         String initialWorkstation = asset.getWorkstation();
+        if (!transfers.isEmpty()) {
+            TransferRecord earliest = transfers.get(0);
+            if (earliest.getFromWorkstation() != null) {
+                initialWorkstation = earliest.getFromWorkstation();
+            }
+        }
+
         LocalDateTime initialTime = asset.getCreateTime() != null ? asset.getCreateTime() :
                 (asset.getEntryDate() != null ? LocalDateTime.of(asset.getEntryDate(), LocalTime.MIN) : null);
 
