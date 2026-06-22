@@ -16,8 +16,12 @@ export function checkDuplicateAsset(data) {
   return request.post('/tooling/check-duplicate', data)
 }
 
-export function updateAsset(id, data, forceUpdate = false) {
-  return request.put(`/tooling/${id}`, data, { params: { forceUpdate } })
+export function updateAsset(id, data, forceUpdate = false, statusChangeRemark) {
+  const params = { forceUpdate }
+  if (statusChangeRemark !== undefined && statusChangeRemark !== null) {
+    params.statusChangeRemark = statusChangeRemark
+  }
+  return request.put(`/tooling/${id}`, data, { params })
 }
 
 export function deleteAsset(id) {

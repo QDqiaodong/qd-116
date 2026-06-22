@@ -152,6 +152,13 @@
             style="width: 100%"
           />
         </el-form-item>
+        <el-form-item v-if="isEdit" label="状态" prop="status">
+          <el-select v-model="form.status" placeholder="请选择状态" style="width: 100%">
+            <el-option label="在用" value="IN_USE" />
+            <el-option label="已移位" value="TRANSFERRED" />
+            <el-option label="已报废" value="SCRAPPED" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="图片">
           <el-upload
             v-model:file-list="fileList"
@@ -168,6 +175,18 @@
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="请输入备注" />
+        </el-form-item>
+        <el-form-item
+          v-if="isEdit && (isStatusChanged || isWorkstationChanged)"
+          label="状态变更说明"
+          prop="statusChangeRemark"
+        >
+          <el-input
+            v-model="form.statusChangeRemark"
+            type="textarea"
+            :rows="2"
+            placeholder="请说明状态/工位变更的原因，必填"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -191,6 +210,14 @@
         </el-form-item>
         <el-form-item label="操作人" prop="operator">
           <el-input v-model="transferForm.operator" placeholder="请输入操作人" />
+        </el-form-item>
+        <el-form-item label="状态变更说明" prop="statusChangeRemark">
+          <el-input
+            v-model="transferForm.statusChangeRemark"
+            type="textarea"
+            :rows="2"
+            placeholder="请说明移位原因，必填"
+          />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="transferForm.remark" type="textarea" :rows="2" placeholder="请输入备注" />
@@ -221,6 +248,14 @@
         </el-form-item>
         <el-form-item label="操作人" prop="operator">
           <el-input v-model="scrapForm.operator" placeholder="请输入操作人" />
+        </el-form-item>
+        <el-form-item label="状态变更说明" prop="statusChangeRemark">
+          <el-input
+            v-model="scrapForm.statusChangeRemark"
+            type="textarea"
+            :rows="2"
+            placeholder="请说明报废原因的详细情况，必填"
+          />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="scrapForm.remark" type="textarea" :rows="2" placeholder="请输入备注" />
@@ -427,6 +462,8 @@ const formRef = ref(null)
 const submitting = ref(false)
 const fileList = ref([])
 const editId = ref(null)
+const originalStatus = ref('')
+const originalWorkstation = ref('')
 
 const form = reactive({
   toolingCode: '',
@@ -436,13 +473,34 @@ const form = reactive({
   status: 'IN_USE',
   imageUrl: '',
   remark: '',
+  statusChangeRemark: '',
 })
+
+const isStatusChanged = computed(() => {
+  return isEdit.value && originalStatus.value !== form.status
+})
+const isWorkstationChanged = computed(() => {
+  return isEdit.value && originalWorkstation.value !== form.workstation
+})
+
+const validateStatusChangeRemark = (rule, value, callback) => {
+  if (isEdit.value && (isStatusChanged.value || isWorkstationChanged.value)) {
+    if (!value || !value.trim()) {
+      callback(new Error('状态或工位发生变化时，请填写状态变更说明'))
+    } else {
+      callback()
+    }
+  } else {
+    callback()
+  }
+}
 
 const rules = {
   toolingCode: [{ required: true, message: '请输入工装编号', trigger: 'blur' }],
   productName: [{ required: true, message: '请输入适配产品', trigger: 'blur' }],
   workstation: [{ required: true, message: '请选择存放工位', trigger: 'change' }],
   entryDate: [{ required: true, message: '请选择入库日期', trigger: 'change' }],
+  statusChangeRemark: [{ validator: validateStatusChangeRemark, trigger: 'blur' }],
 }
 
 const openDialog = (item, precheckImageUrl, precheckFileName) => {
@@ -458,7 +516,10 @@ const openDialog = (item, precheckImageUrl, precheckFileName) => {
       status: item.status,
       imageUrl: item.imageUrl || '',
       remark: item.remark || '',
+      statusChangeRemark: '',
     })
+    originalStatus.value = item.status || ''
+    originalWorkstation.value = item.workstation || ''
     fileList.value = item.imageUrl
       ? [{ name: 'current', url: '/api/file/' + item.imageUrl, status: 'success' }]
       : []
@@ -472,7 +533,10 @@ const openDialog = (item, precheckImageUrl, precheckFileName) => {
       status: 'IN_USE',
       imageUrl: '',
       remark: '',
+      statusChangeRemark: '',
     })
+    originalStatus.value = ''
+    originalWorkstation.value = ''
     if (precheckImageUrl) {
       fileList.value = [{ name: precheckFileName || 'precheck-image', url: precheckImageUrl, status: 'success' }]
     } else {
@@ -644,7 +708,10 @@ const doCreateAsset = async (forceCreate = false) => {
 }
 
 const doUpdateAsset = async (forceUpdate = false) => {
-  const res = await updateAsset(editId.value, { ...form }, forceUpdate)
+  const remarkArg = (isStatusChanged.value || isWorkstationChanged.value)
+    ? form.statusChangeRemark
+    : undefined
+  const res = await updateAsset(editId.value, { ...form }, forceUpdate, remarkArg)
   if (res.code === 409) {
     const similarAssets = res.data?.similarAssets || []
     try {
@@ -745,17 +812,20 @@ const transferFormRef = ref(null)
 const transferForm = reactive({
   toWorkstation: '',
   operator: '',
+  statusChangeRemark: '',
   remark: '',
 })
 const transferRules = {
   toWorkstation: [{ required: true, message: '请选择目标工位', trigger: 'change' }],
   operator: [{ required: true, message: '请输入操作人', trigger: 'blur' }],
+  statusChangeRemark: [{ required: true, message: '请填写状态变更说明', trigger: 'blur' }],
 }
 
 const handleTransfer = (item) => {
   currentItem.value = item
   transferForm.toWorkstation = ''
   transferForm.operator = ''
+  transferForm.statusChangeRemark = ''
   transferForm.remark = ''
   transferVisible.value = true
 }
@@ -770,6 +840,7 @@ const submitTransfer = async () => {
       fromWorkstation: currentItem.value.workstation,
       toWorkstation: transferForm.toWorkstation,
       operator: transferForm.operator,
+      statusChangeRemark: transferForm.statusChangeRemark,
       remark: transferForm.remark,
     })
     ElMessage.success('移位成功')
@@ -789,12 +860,14 @@ const scrapForm = reactive({
   scrapReason: '',
   scrapDate: '',
   operator: '',
+  statusChangeRemark: '',
   remark: '',
 })
 const scrapRules = {
   scrapReason: [{ required: true, message: '请输入报废原因', trigger: 'blur' }],
   scrapDate: [{ required: true, message: '请选择报废日期', trigger: 'change' }],
   operator: [{ required: true, message: '请输入操作人', trigger: 'blur' }],
+  statusChangeRemark: [{ required: true, message: '请填写状态变更说明', trigger: 'blur' }],
 }
 
 const handleScrap = (item) => {
@@ -802,6 +875,7 @@ const handleScrap = (item) => {
   scrapForm.scrapReason = ''
   scrapForm.scrapDate = dayjs().format('YYYY-MM-DD')
   scrapForm.operator = ''
+  scrapForm.statusChangeRemark = ''
   scrapForm.remark = ''
   scrapVisible.value = true
 }
@@ -832,6 +906,7 @@ const submitScrap = async () => {
       scrapReason: scrapForm.scrapReason,
       scrapDate: scrapForm.scrapDate,
       operator: scrapForm.operator,
+      statusChangeRemark: scrapForm.statusChangeRemark,
       remark: scrapForm.remark,
     })
     if (res && res.code === 409) {

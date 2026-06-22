@@ -36,5 +36,7 @@ public class TransferRecord {
 
     private String remark;
 
+    private String statusChangeRemark;
+
     private Long approvalId;
 }

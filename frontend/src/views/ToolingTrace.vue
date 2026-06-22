@@ -80,6 +80,13 @@
                     操作人：{{ event.operator }}
                   </span>
                 </div>
+                <div v-if="event.statusChangeRemark" class="event-status-change">
+                  <span class="status-change-label">
+                    <el-icon><Warning /></el-icon>
+                    状态变更说明：
+                  </span>
+                  <span class="status-change-text">{{ event.statusChangeRemark }}</span>
+                </div>
                 <div v-if="event.remark" class="event-remark">
                   <span class="remark-label">备注：</span>
                   <span class="remark-text">{{ event.remark }}</span>
@@ -309,6 +316,35 @@ onMounted(() => {
   gap: 4px;
   font-size: 13px;
   color: #606266;
+}
+
+.event-status-change {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 13px;
+  padding: 10px 12px;
+  background: #fff7e6;
+  border: 1px solid #ffe58f;
+  border-radius: 4px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.status-change-label {
+  color: #d48806;
+  flex-shrink: 0;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-change-text {
+  color: #874d00;
+  flex: 1;
+  line-height: 1.5;
 }
 
 .event-remark {

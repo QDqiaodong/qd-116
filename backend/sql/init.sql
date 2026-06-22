@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS tooling_asset (
     status VARCHAR(20) DEFAULT 'IN_USE',
     image_url VARCHAR(500),
     remark VARCHAR(500),
+    last_status_change_remark VARCHAR(500),
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS transfer_record (
     transfer_time DATETIME,
     operator VARCHAR(50),
     remark VARCHAR(500),
+    status_change_remark VARCHAR(500),
     approval_id BIGINT,
     INDEX idx_tooling_code (tooling_code),
     INDEX idx_approval_id (approval_id)
@@ -48,7 +50,8 @@ CREATE TABLE IF NOT EXISTS scrap_record (
     scrap_reason VARCHAR(500),
     scrap_date DATE,
     operator VARCHAR(50),
-    remark VARCHAR(500)
+    remark VARCHAR(500),
+    status_change_remark VARCHAR(500)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS tooling_inventory_diff (

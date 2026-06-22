@@ -22,6 +22,7 @@
       <el-table-column prop="toWorkstation" label="新工位" min-width="100" />
       <el-table-column prop="transferTime" label="移位时间" min-width="160" />
       <el-table-column prop="operator" label="操作人" min-width="100" />
+      <el-table-column prop="statusChangeRemark" label="状态变更说明" min-width="180" show-overflow-tooltip />
       <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
       <el-table-column label="操作" width="120" fixed="right">
         <template #default="{ row }">
@@ -47,6 +48,9 @@
         </el-form-item>
         <el-form-item label="操作人" prop="operator">
           <el-input v-model="transferForm.operator" placeholder="请输入操作人" />
+        </el-form-item>
+        <el-form-item label="状态变更说明" prop="statusChangeRemark">
+          <el-input v-model="transferForm.statusChangeRemark" type="textarea" :rows="2" placeholder="请说明移位原因，必填" />
         </el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="transferForm.remark" type="textarea" :rows="3" placeholder="请输入备注" />
@@ -177,6 +181,7 @@ const transferForm = reactive({
   fromWorkstation: '',
   toWorkstation: '',
   operator: '',
+  statusChangeRemark: '',
   remark: '',
 })
 
@@ -195,6 +200,7 @@ const transferRules = {
   fromWorkstation: [{ required: true, message: '请选择原工位', trigger: 'change' }],
   toWorkstation: [{ required: true, validator: validateToWorkstation, trigger: 'change' }],
   operator: [{ required: true, message: '请输入操作人', trigger: 'blur' }],
+  statusChangeRemark: [{ required: true, message: '请填写状态变更说明', trigger: 'blur' }],
 }
 
 const openTransferDialog = () => {
@@ -203,6 +209,7 @@ const openTransferDialog = () => {
     fromWorkstation: '',
     toWorkstation: '',
     operator: '',
+    statusChangeRemark: '',
     remark: '',
   })
   transferDialogVisible.value = true
@@ -218,6 +225,7 @@ const submitTransfer = async () => {
       fromWorkstation: transferForm.fromWorkstation,
       toWorkstation: transferForm.toWorkstation,
       operator: transferForm.operator,
+      statusChangeRemark: transferForm.statusChangeRemark,
       remark: transferForm.remark,
     })
     ElMessage.success('移位登记成功')

@@ -48,14 +48,17 @@ public class TransferService {
                 && (REGION_REPAIR.equals(toRegion) || REGION_MOLD.equals(toRegion));
     }
 
-    public TransferRecord transfer(String toolingCode, String fromWorkstation, String toWorkstation, String operator, String remark) {
-        return transferWithApproval(toolingCode, fromWorkstation, toWorkstation, operator, remark, null);
+    public TransferRecord transfer(String toolingCode, String fromWorkstation, String toWorkstation, String operator, String remark, String statusChangeRemark) {
+        return transferWithApproval(toolingCode, fromWorkstation, toWorkstation, operator, remark, statusChangeRemark, null);
     }
 
     public TransferRecord transferWithApproval(String toolingCode, String fromWorkstation, String toWorkstation,
-                                               String operator, String remark, Long approvalId) {
+                                               String operator, String remark, String statusChangeRemark, Long approvalId) {
         if (operator == null || operator.trim().isEmpty()) {
             throw new BusinessException("操作人不能为空");
+        }
+        if (statusChangeRemark == null || statusChangeRemark.trim().isEmpty()) {
+            throw new BusinessException("状态变更说明不能为空");
         }
 
         ToolingAsset asset = toolingAssetRepository.findByToolingCode(toolingCode)
@@ -79,6 +82,7 @@ public class TransferService {
 
         asset.setWorkstation(toWorkstation);
         asset.setStatus(ToolingStatus.TRANSFERRED);
+        asset.setLastStatusChangeRemark(statusChangeRemark);
         asset.setUpdateTime(LocalDateTime.now());
         toolingAssetRepository.save(asset);
 
@@ -89,6 +93,7 @@ public class TransferService {
                 .transferTime(LocalDateTime.now())
                 .operator(operator)
                 .remark(remark)
+                .statusChangeRemark(statusChangeRemark)
                 .approvalId(approvalId)
                 .build();
         return transferRecordRepository.save(record);

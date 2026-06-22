@@ -28,9 +28,10 @@ public class ScrapController {
             @RequestParam String scrapReason,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate scrapDate,
             @RequestParam String operator,
-            @RequestParam(required = false) String remark) {
+            @RequestParam(required = false) String remark,
+            @RequestParam String statusChangeRemark) {
         try {
-            ScrapRecord created = scrapService.scrap(toolingCode, scrapReason, scrapDate, operator, remark);
+            ScrapRecord created = scrapService.scrap(toolingCode, scrapReason, scrapDate, operator, remark, statusChangeRemark);
             return ResponseEntity.ok(Result.ok(created));
         } catch (ScrapDuplicateException e) {
             ScrapRecord existing = e.getExistingRecord();

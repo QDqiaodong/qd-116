@@ -23,8 +23,9 @@ public class TransferController {
             @RequestParam String fromWorkstation,
             @RequestParam String toWorkstation,
             @RequestParam String operator,
-            @RequestParam(required = false) String remark) {
-        return Result.ok(transferService.transfer(toolingCode, fromWorkstation, toWorkstation, operator, remark));
+            @RequestParam(required = false) String remark,
+            @RequestParam String statusChangeRemark) {
+        return Result.ok(transferService.transfer(toolingCode, fromWorkstation, toWorkstation, operator, remark, statusChangeRemark));
     }
 
     @GetMapping("/list")

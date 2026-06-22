@@ -34,6 +34,19 @@
       </el-table-column>
       <el-table-column prop="scrapDate" label="报废日期" min-width="120" />
       <el-table-column prop="operator" label="操作人" min-width="100" />
+      <el-table-column prop="statusChangeRemark" label="状态变更说明" min-width="180">
+        <template #default="{ row }">
+          <el-tooltip
+            v-if="row.statusChangeRemark && row.statusChangeRemark.length > 15"
+            :content="row.statusChangeRemark"
+            placement="top"
+            popper-class="remark-tooltip"
+          >
+            <span class="remark-text">{{ row.statusChangeRemark.slice(0, 15) }}...</span>
+          </el-tooltip>
+          <span v-else class="remark-text">{{ row.statusChangeRemark || '-' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="备注" min-width="160">
         <template #default="{ row }">
           <el-tooltip
@@ -78,6 +91,9 @@
         <el-form-item label="操作人" prop="operator">
           <el-input v-model="scrapForm.operator" placeholder="请输入操作人" />
         </el-form-item>
+        <el-form-item label="状态变更说明" prop="statusChangeRemark">
+          <el-input v-model="scrapForm.statusChangeRemark" type="textarea" :rows="2" placeholder="请说明报废详细情况，必填" />
+        </el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="scrapForm.remark" type="textarea" :rows="2" placeholder="请输入备注" />
         </el-form-item>
@@ -107,6 +123,19 @@
         </el-table-column>
         <el-table-column prop="scrapDate" label="报废日期" min-width="120" />
         <el-table-column prop="operator" label="操作人" min-width="100" />
+        <el-table-column prop="statusChangeRemark" label="状态变更说明" min-width="180">
+          <template #default="{ row }">
+            <el-tooltip
+              v-if="row.statusChangeRemark && row.statusChangeRemark.length > 15"
+              :content="row.statusChangeRemark"
+              placement="top"
+              popper-class="remark-tooltip"
+            >
+              <span class="remark-text">{{ row.statusChangeRemark.slice(0, 15) }}...</span>
+            </el-tooltip>
+            <span v-else class="remark-text">{{ row.statusChangeRemark || '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="备注" min-width="160">
           <template #default="{ row }">
             <el-tooltip
@@ -215,6 +244,7 @@ const scrapForm = reactive({
   scrapDate: '',
   scrapReason: '',
   operator: '',
+  statusChangeRemark: '',
   remark: '',
 })
 
@@ -223,6 +253,7 @@ const scrapRules = {
   scrapDate: [{ required: true, message: '请选择报废日期', trigger: 'change' }],
   scrapReason: [{ required: true, message: '请输入报废原因', trigger: 'blur' }],
   operator: [{ required: true, message: '请输入操作人', trigger: 'blur' }],
+  statusChangeRemark: [{ required: true, message: '请填写状态变更说明', trigger: 'blur' }],
 }
 
 const openScrapDialog = () => {
@@ -231,6 +262,7 @@ const openScrapDialog = () => {
     scrapDate: '',
     scrapReason: '',
     operator: '',
+    statusChangeRemark: '',
     remark: '',
   })
   scrapDialogVisible.value = true
@@ -262,6 +294,7 @@ const submitScrap = async () => {
       scrapDate: scrapForm.scrapDate,
       scrapReason: scrapForm.scrapReason,
       operator: scrapForm.operator,
+      statusChangeRemark: scrapForm.statusChangeRemark,
       remark: scrapForm.remark,
     })
     if (res && res.code === 409) {

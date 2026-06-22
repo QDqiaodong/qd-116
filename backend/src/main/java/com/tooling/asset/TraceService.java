@@ -36,6 +36,7 @@ public class TraceService {
                 .workstation(asset.getWorkstation())
                 .operator(null)
                 .remark(asset.getRemark())
+                .statusChangeRemark(asset.getLastStatusChangeRemark())
                 .detail("建档入库，适配产品：" + asset.getProductName())
                 .build());
 
@@ -48,6 +49,7 @@ public class TraceService {
                     .workstation(t.getToWorkstation())
                     .operator(t.getOperator())
                     .remark(t.getRemark())
+                    .statusChangeRemark(t.getStatusChangeRemark())
                     .detail("从 " + t.getFromWorkstation() + " 移位至 " + t.getToWorkstation())
                     .build());
         }
@@ -75,6 +77,7 @@ public class TraceService {
                     .workstation(null)
                     .operator(s.getOperator())
                     .remark(s.getRemark())
+                    .statusChangeRemark(s.getStatusChangeRemark())
                     .detail("报废原因：" + s.getScrapReason())
                     .build());
         }

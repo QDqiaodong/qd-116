@@ -42,6 +42,8 @@ public class ToolingAsset {
 
     private String remark;
 
+    private String lastStatusChangeRemark;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;

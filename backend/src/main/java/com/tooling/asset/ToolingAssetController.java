@@ -51,9 +51,10 @@ public class ToolingAssetController {
     public ResponseEntity<Result<?>> update(
             @PathVariable Long id,
             @RequestBody ToolingAsset asset,
-            @RequestParam(defaultValue = "false") boolean forceUpdate) {
+            @RequestParam(defaultValue = "false") boolean forceUpdate,
+            @RequestParam(required = false) String statusChangeRemark) {
         try {
-            ToolingAsset updated = toolingAssetService.updateAsset(id, asset, forceUpdate);
+            ToolingAsset updated = toolingAssetService.updateAsset(id, asset, forceUpdate, statusChangeRemark);
             return ResponseEntity.ok(Result.ok(updated));
         } catch (DuplicateWarningException e) {
             DuplicateCheckResult warning = DuplicateCheckResult.builder()

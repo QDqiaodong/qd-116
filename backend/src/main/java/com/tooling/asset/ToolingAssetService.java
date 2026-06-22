@@ -106,7 +106,7 @@ public class ToolingAssetService {
         return toolingAssetRepository.save(asset);
     }
 
-    public ToolingAsset updateAsset(Long id, ToolingAsset asset, boolean forceUpdate) {
+    public ToolingAsset updateAsset(Long id, ToolingAsset asset, boolean forceUpdate, String statusChangeRemark) {
         ToolingAsset existing = toolingAssetRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("工装不存在: " + id));
 
@@ -130,10 +130,18 @@ public class ToolingAssetService {
 
         boolean workstationChanged = (existing.getWorkstation() == null && asset.getWorkstation() != null)
                 || (existing.getWorkstation() != null && !existing.getWorkstation().equals(asset.getWorkstation()));
+        boolean statusChanged = (existing.getStatus() == null && asset.getStatus() != null)
+                || (existing.getStatus() != null && !existing.getStatus().equals(asset.getStatus()));
         boolean statusChangedToScrapped = !ToolingStatus.SCRAPPED.equals(existing.getStatus())
                 && ToolingStatus.SCRAPPED.equals(asset.getStatus());
         boolean statusChangedFromScrapped = ToolingStatus.SCRAPPED.equals(existing.getStatus())
                 && !ToolingStatus.SCRAPPED.equals(asset.getStatus());
+
+        if (workstationChanged || statusChanged) {
+            if (statusChangeRemark == null || statusChangeRemark.trim().isEmpty()) {
+                throw new BusinessException("状态或工位发生变化时，状态变更说明不能为空");
+            }
+        }
 
         if (workstationChanged && !statusChangedToScrapped) {
             workstationCapacityService.validateCapacityForAdd(asset.getWorkstation());
@@ -148,6 +156,9 @@ public class ToolingAssetService {
         existing.setStatus(asset.getStatus());
         existing.setImageUrl(asset.getImageUrl());
         existing.setRemark(asset.getRemark());
+        if (workstationChanged || statusChanged) {
+            existing.setLastStatusChangeRemark(statusChangeRemark);
+        }
         existing.setUpdateTime(LocalDateTime.now());
         return toolingAssetRepository.save(existing);
     }

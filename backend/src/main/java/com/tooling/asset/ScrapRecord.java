@@ -33,4 +33,6 @@ public class ScrapRecord {
     private String operator;
 
     private String remark;
+
+    private String statusChangeRemark;
 }

@@ -153,6 +153,7 @@ public class HighRiskTransferApprovalService {
                 approval.getToWorkstation(),
                 executor,
                 "高风险移位审批通过执行，审批ID: " + id,
+                approval.getApplyReason() != null ? approval.getApplyReason() : "高风险移位审批通过执行",
                 id
         );
 

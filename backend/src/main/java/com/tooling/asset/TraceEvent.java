@@ -25,5 +25,7 @@ public class TraceEvent {
 
     private String remark;
 
+    private String statusChangeRemark;
+
     private String detail;
 }

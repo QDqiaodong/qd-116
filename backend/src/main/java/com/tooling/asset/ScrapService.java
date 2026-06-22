@@ -15,7 +15,11 @@ public class ScrapService {
     private final ScrapRecordRepository scrapRecordRepository;
     private final ToolingAssetRepository toolingAssetRepository;
 
-    public ScrapRecord scrap(String toolingCode, String scrapReason, java.time.LocalDate scrapDate, String operator, String remark) {
+    public ScrapRecord scrap(String toolingCode, String scrapReason, java.time.LocalDate scrapDate, String operator, String remark, String statusChangeRemark) {
+        if (statusChangeRemark == null || statusChangeRemark.trim().isEmpty()) {
+            throw new BusinessException("状态变更说明不能为空");
+        }
+
         ToolingAsset asset = toolingAssetRepository.findByToolingCode(toolingCode)
                 .orElseThrow(() -> new RuntimeException("工装不存在: " + toolingCode));
 
@@ -30,6 +34,7 @@ public class ScrapService {
         }
 
         asset.setStatus(ToolingStatus.SCRAPPED);
+        asset.setLastStatusChangeRemark(statusChangeRemark);
         asset.setUpdateTime(LocalDateTime.now());
         toolingAssetRepository.save(asset);
 
@@ -39,6 +44,7 @@ public class ScrapService {
                 .scrapDate(scrapDate)
                 .operator(operator)
                 .remark(remark)
+                .statusChangeRemark(statusChangeRemark)
                 .build();
         return scrapRecordRepository.save(record);
     }
